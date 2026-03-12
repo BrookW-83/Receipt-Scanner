@@ -7,6 +7,51 @@ class ApiClient {
 
   ApiClient({required this.client, required this.tokenProvider});
 
+  Future<Map<String, String>> _getHeaders() async {
+    final token = await tokenProvider();
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
+  }
+
+  Future<http.Response> get({required Uri uri}) async {
+    final headers = await _getHeaders();
+    return client.get(uri, headers: headers);
+  }
+
+  Future<http.Response> post({
+    required Uri uri,
+    Map<String, dynamic>? body,
+  }) async {
+    final headers = await _getHeaders();
+    return client.post(
+      uri,
+      headers: headers,
+      body: body != null ? jsonEncode(body) : null,
+    );
+  }
+
+  Future<http.Response> patch({
+    required Uri uri,
+    Map<String, dynamic>? body,
+  }) async {
+    final headers = await _getHeaders();
+    return client.patch(
+      uri,
+      headers: headers,
+      body: body != null ? jsonEncode(body) : null,
+    );
+  }
+
+  Future<http.Response> delete({required Uri uri}) async {
+    final headers = await _getHeaders();
+    return client.delete(uri, headers: headers);
+  }
+
   Future<http.Response> postMultipart({
     required Uri uri,
     required String fieldName,

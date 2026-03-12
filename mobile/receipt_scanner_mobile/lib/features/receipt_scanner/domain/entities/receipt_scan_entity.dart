@@ -9,6 +9,15 @@ class ReceiptScanEntity extends Equatable {
   final String status;
   final List<ReceiptItemEntity> items;
 
+  // New fields
+  final DateTime? purchaseDate;
+  final num? subtotal;
+  final num? tax;
+  final num? totalSavings;
+  final num? totalMissedPromos;
+  final int matchedItemsCount;
+  final DateTime? createdAt;
+
   const ReceiptScanEntity({
     required this.id,
     required this.merchantName,
@@ -16,8 +25,35 @@ class ReceiptScanEntity extends Equatable {
     required this.currency,
     required this.status,
     required this.items,
+    this.purchaseDate,
+    this.subtotal,
+    this.tax,
+    this.totalSavings,
+    this.totalMissedPromos,
+    this.matchedItemsCount = 0,
+    this.createdAt,
   });
 
+  bool get isProcessing => status == 'pending' || status == 'processing';
+  bool get isCompleted => status == 'completed';
+  bool get isFailed => status == 'failed';
+  bool get hasSavings => (totalSavings ?? 0) > 0;
+  bool get hasMissedPromos => (totalMissedPromos ?? 0) > 0;
+
   @override
-  List<Object?> get props => [id, merchantName, total, currency, status, items];
+  List<Object?> get props => [
+        id,
+        merchantName,
+        total,
+        currency,
+        status,
+        items,
+        purchaseDate,
+        subtotal,
+        tax,
+        totalSavings,
+        totalMissedPromos,
+        matchedItemsCount,
+        createdAt,
+      ];
 }
