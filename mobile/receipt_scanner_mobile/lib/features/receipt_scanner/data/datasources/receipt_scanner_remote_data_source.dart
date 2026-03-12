@@ -7,6 +7,10 @@ abstract class ReceiptScannerRemoteDataSource {
     required List<int> imageBytes,
     required String filename,
   });
+
+  Future<ReceiptScanModel> getReceiptDetails(String scanId);
+
+  Future<List<ReceiptScanModel>> getRecentScans({int limit = 10});
 }
 
 class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSource {
@@ -31,5 +35,35 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
     }
 
     return ReceiptScanModel.fromJson(apiClient.parseJsonObject(response.body));
+  }
+
+  @override
+  Future<ReceiptScanModel> getReceiptDetails(String scanId) async {
+    final response = await apiClient.get(
+      uri: Uri.parse('${ReceiptScannerEnvironment.apiBaseUrl}receipt-scanner/scans/$scanId/'),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to get receipt details (${response.statusCode}): ${response.body}');
+    }
+
+    return ReceiptScanModel.fromJson(apiClient.parseJsonObject(response.body));
+  }
+
+  @override
+  Future<List<ReceiptScanModel>> getRecentScans({int limit = 10}) async {
+    final response = await apiClient.get(
+      uri: Uri.parse('${ReceiptScannerEnvironment.apiBaseUrl}receipt-scanner/scans/?limit=$limit'),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to get recent scans (${response.statusCode}): ${response.body}');
+    }
+
+    final data = apiClient.parseJsonObject(response.body);
+    final results = data['results'] as List<dynamic>? ?? [];
+    return results
+        .map((e) => ReceiptScanModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }
