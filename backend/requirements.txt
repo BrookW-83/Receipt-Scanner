@@ -6,3 +6,19 @@ python-dotenv==1.1.1
 Pillow==11.3.0
 celery[redis]==5.5.3
 redis==5.0.4
+
+# AI/ML
+google-genai>=1.0.0
+pydantic>=2.0.0
+
+# Firebase Push Notifications
+firebase-admin>=6.0.0
+
+# Celery Beat for periodic tasks
+django-celery-beat>=2.5.0
+
+# HTTP requests for image loading
+requests>=2.31.0
+
+# PostgreSQL (for pg_trgm extension)
+psycopg2-binary>=2.9.0
