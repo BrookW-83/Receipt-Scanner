@@ -28,21 +28,28 @@ class ReceiptScanModel extends ReceiptScanEntity {
       return null;
     }
 
+    num? parseNum(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value;
+      if (value is String) return num.tryParse(value);
+      return null;
+    }
+
     return ReceiptScanModel(
       id: (json['id'] ?? '').toString(),
       merchantName: (json['merchant_name'] ?? '').toString(),
-      total: json['total'] as num?,
+      total: parseNum(json['total']),
       currency: (json['currency'] ?? 'USD').toString(),
       status: (json['status'] ?? 'pending').toString(),
       items: itemsRaw
           .map((e) => ReceiptItemModel.fromJson(e as Map<String, dynamic>))
           .toList(),
       purchaseDate: parseDate(json['purchase_date']),
-      subtotal: json['subtotal'] as num?,
-      tax: json['tax'] as num?,
-      totalSavings: json['total_savings'] as num?,
-      totalMissedPromos: json['total_missed_promos'] as num?,
-      matchedItemsCount: (json['matched_items_count'] ?? 0) as int,
+      subtotal: parseNum(json['subtotal']),
+      tax: parseNum(json['tax']),
+      totalSavings: parseNum(json['total_savings']),
+      totalMissedPromos: parseNum(json['total_missed_promos']),
+      matchedItemsCount: (json['matched_items_count'] as num?)?.toInt() ?? 0,
       createdAt: parseDate(json['created_at']),
     );
   }

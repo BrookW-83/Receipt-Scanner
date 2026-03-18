@@ -22,24 +22,31 @@ class ReceiptItemModel extends ReceiptItemEntity {
   });
 
   factory ReceiptItemModel.fromJson(Map<String, dynamic> json) {
+    num? parseNum(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value;
+      if (value is String) return num.tryParse(value);
+      return null;
+    }
+
     return ReceiptItemModel(
       id: (json['id'] ?? '').toString(),
-      lineNumber: (json['line_number'] ?? 0) as int,
+      lineNumber: (parseNum(json['line_number']) ?? 0).toInt(),
       description: (json['description'] ?? '').toString(),
-      quantity: (json['quantity'] ?? 1) as num,
-      unitPrice: json['unit_price'] as num?,
-      totalPrice: json['total_price'] as num?,
-      matchedProductId: json['matched_product_id'] as String?,
-      matchedProductName: json['matched_product_name'] as String?,
+      quantity: parseNum(json['quantity']) ?? 1,
+      unitPrice: parseNum(json['unit_price']),
+      totalPrice: parseNum(json['total_price']),
+      matchedProductId: json['matched_product_id']?.toString(),
+      matchedProductName: json['matched_product_name']?.toString(),
       matchConfidence: (json['match_confidence'] ?? 'no_match').toString(),
-      confidenceScore: json['confidence_score'] as num?,
-      databasePrice: json['database_price'] as num?,
-      savingPerUnit: json['saving_per_unit'] as num?,
-      totalSaving: json['total_saving'] as num?,
+      confidenceScore: parseNum(json['confidence_score']),
+      databasePrice: parseNum(json['database_price']),
+      savingPerUnit: parseNum(json['saving_per_unit']),
+      totalSaving: parseNum(json['total_saving']),
       wasOnPromo: json['was_on_promo'] == true,
-      promoPrice: json['promo_price'] as num?,
-      missedSavings: json['missed_savings'] as num?,
-      promoDealId: json['promo_deal_id'] as String?,
+      promoPrice: parseNum(json['promo_price']),
+      missedSavings: parseNum(json['missed_savings']),
+      promoDealId: json['promo_deal_id']?.toString(),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:receipt_scanner_mobile/core/api/api_client.dart';
 import 'package:receipt_scanner_mobile/core/config/environment.dart';
 import '../models/receipt_scan_model.dart';
@@ -60,8 +61,15 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
       throw Exception('Failed to get recent scans (${response.statusCode}): ${response.body}');
     }
 
-    final data = apiClient.parseJsonObject(response.body);
-    final results = data['results'] as List<dynamic>? ?? [];
+    final decoded = jsonDecode(response.body);
+    final List<dynamic> results;
+    if (decoded is List) {
+      results = decoded;
+    } else if (decoded is Map<String, dynamic>) {
+      results = decoded['results'] as List<dynamic>? ?? [];
+    } else {
+      results = [];
+    }
     return results
         .map((e) => ReceiptScanModel.fromJson(e as Map<String, dynamic>))
         .toList();

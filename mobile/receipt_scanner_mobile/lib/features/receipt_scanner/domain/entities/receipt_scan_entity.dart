@@ -34,7 +34,7 @@ class ReceiptScanEntity extends Equatable {
     this.createdAt,
   });
 
-  bool get isProcessing => status == 'pending' || status == 'processing';
+  bool get isProcessing => status == 'pending' || status == 'processing' || status == 'matching';
   bool get isCompleted => status == 'completed';
   bool get isFailed => status == 'failed';
   bool get hasSavings => (totalSavings ?? 0) > 0;
