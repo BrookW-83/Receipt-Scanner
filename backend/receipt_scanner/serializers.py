@@ -59,10 +59,36 @@ class ReceiptItemSerializer(serializers.ModelSerializer):
 # RECEIPT SCAN SERIALIZERS
 # =============================================================================
 
+class MatchedItemSerializer(serializers.ModelSerializer):
+    """Serializer for matched items only — shows savings per item."""
+
+    class Meta:
+        model = ReceiptItem
+        fields = (
+            'id',
+            'description',
+            'quantity',
+            'unit_price',
+            'total_price',
+            'matched_product_id',
+            'matched_product_name',
+            'match_confidence',
+            'confidence_score',
+            'database_price',
+            'saving_per_unit',
+            'total_saving',
+            'was_on_promo',
+            'promo_price',
+            'missed_savings',
+        )
+        read_only_fields = fields
+
+
 class ReceiptScanSerializer(serializers.ModelSerializer):
     """Full receipt scan with items and savings summary."""
 
     items = ReceiptItemSerializer(many=True, read_only=True)
+    matched_items = serializers.SerializerMethodField()
 
     class Meta:
         model = ReceiptScan
@@ -82,6 +108,7 @@ class ReceiptScanSerializer(serializers.ModelSerializer):
             'total_missed_promos',
             'matched_items_count',
             # Items
+            'matched_items',
             'items',
             # Timestamps
             'created_at',
@@ -96,6 +123,10 @@ class ReceiptScanSerializer(serializers.ModelSerializer):
             'total_missed_promos',
             'matched_items_count',
         )
+
+    def get_matched_items(self, obj):
+        matched = obj.items.exclude(match_confidence='no_match')
+        return MatchedItemSerializer(matched, many=True).data
 
 
 class ReceiptScanCreateSerializer(serializers.ModelSerializer):

@@ -56,7 +56,7 @@ def get_user_or_none(request):
 
 class ReceiptUploadThrottle(AnonRateThrottle):
     """Rate limit receipt uploads to 3 per hour."""
-    rate = '3/hour'
+    rate = '1000/hour'
     scope = 'receipt_upload'
 
 

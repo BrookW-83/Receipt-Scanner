@@ -29,7 +29,7 @@ DEAL_TABLE = 'products_deal'
 # =============================================================================
 
 # Valid deal statuses for price comparison
-VALID_DEAL_STATUSES = ('MANUALLY_ADDED', 'AUTO_VERIFIED', 'HUMAN_VERIFIED')
+VALID_DEAL_STATUSES = ('MANUALLY_ADDED', 'AUTO_VERIFIED', 'HUMAN_VERIFIED', 'active')
 
 
 # =============================================================================
