@@ -7,6 +7,8 @@ import 'core/router/app_router.dart';
 import 'injections/dependency_injection_container.dart';
 import 'features/receipt_scanner/presentation/bloc/receipt_scanner_bloc.dart';
 
+bool _firebaseInitialized = false;
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
@@ -15,17 +17,18 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp();
-
-  // Set up background message handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  // Initialize Firebase (skip gracefully if config files are missing)
+  try {
+    await Firebase.initializeApp();
+    _firebaseInitialized = true;
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    await _requestNotificationPermissions();
+  } catch (e) {
+    debugPrint('Firebase not configured, skipping: $e');
+  }
 
   // Initialize dependency injection (no auth for now)
   await initDepInj(tokenProvider: () async => null);
-
-  // Request notification permissions
-  await _requestNotificationPermissions();
 
   runApp(const ReceiptScannerApp());
 }
@@ -54,6 +57,8 @@ class _ReceiptScannerAppState extends State<ReceiptScannerApp> {
   }
 
   void _setupFirebaseMessaging() {
+    if (!_firebaseInitialized) return;
+
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null) {
@@ -131,7 +136,7 @@ class _ReceiptScannerAppState extends State<ReceiptScannerApp> {
             centerTitle: true,
             elevation: 0,
           ),
-          cardTheme: CardTheme(
+          cardTheme: CardThemeData(
             elevation: 2,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

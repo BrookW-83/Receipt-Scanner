@@ -3,6 +3,8 @@
 .packages
 .pub/
 build/
+.flutter-plugins-dependencies
+.metadata
 
 # Generated
 **/generated_plugin_registrant.*
@@ -10,6 +12,7 @@ build/
 # IDE
 .idea/
 .vscode/
+*.iml
 
 # Platform artifacts
 android/.gradle/

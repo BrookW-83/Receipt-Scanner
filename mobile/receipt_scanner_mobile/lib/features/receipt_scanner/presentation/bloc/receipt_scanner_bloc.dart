@@ -56,6 +56,21 @@ class PollReceiptStatusRequested extends ReceiptScannerEvent {
   List<Object?> get props => [scanId];
 }
 
+class _PollTickRequested extends ReceiptScannerEvent {
+  final String scanId;
+  final int attempt;
+  final int consecutiveErrors;
+
+  const _PollTickRequested({
+    required this.scanId,
+    required this.attempt,
+    required this.consecutiveErrors,
+  });
+
+  @override
+  List<Object?> get props => [scanId, attempt, consecutiveErrors];
+}
+
 class StopPollingRequested extends ReceiptScannerEvent {}
 
 class LoadRecentScansRequested extends ReceiptScannerEvent {}
@@ -161,6 +176,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
   Timer? _pollingTimer;
   static const _pollingInterval = Duration(seconds: 2);
   static const _maxPollingAttempts = 60; // 2 minutes max
+  static const _maxConsecutiveErrors = 5;
 
   ReceiptScannerBloc({
     required this.uploadReceiptUseCase,
@@ -172,6 +188,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
     on<UploadReceiptRequested>(_onUpload);
     on<FetchReceiptDetailsRequested>(_onFetchDetails);
     on<PollReceiptStatusRequested>(_onPollStatus);
+    on<_PollTickRequested>(_onPollTick);
     on<StopPollingRequested>(_onStopPolling);
     on<LoadRecentScansRequested>(_onLoadRecentScans);
     on<ResetStateRequested>(_onResetState);
@@ -228,53 +245,60 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
     Emitter<ReceiptScannerState> emit,
   ) async {
     _pollingTimer?.cancel();
-    var attempts = 0;
-    var consecutiveErrors = 0;
-    const maxConsecutiveErrors = 5;
-
     emit(ReceiptProcessing(scanId: event.scanId, status: 'pending'));
+    // Fire first poll immediately, then schedule subsequent ticks with delay
+    add(_PollTickRequested(scanId: event.scanId, attempt: 0, consecutiveErrors: 0));
+  }
 
-    Future<void> poll() async {
-      if (attempts >= _maxPollingAttempts) {
-        emit(const ReceiptScannerFailure('Processing timed out. Please try again.'));
+  Future<void> _onPollTick(
+    _PollTickRequested event,
+    Emitter<ReceiptScannerState> emit,
+  ) async {
+    if (event.attempt >= _maxPollingAttempts) {
+      _pollingTimer?.cancel();
+      emit(const ReceiptScannerFailure('Processing timed out. Please try again.'));
+      return;
+    }
+
+    try {
+      final scan = await getReceiptDetailsUseCase(event.scanId);
+
+      if (scan.isCompleted) {
+        _pollingTimer?.cancel();
+        emit(ReceiptDetailsLoaded(scan));
+      } else if (scan.isFailed) {
+        _pollingTimer?.cancel();
+        emit(const ReceiptScannerFailure('Receipt processing failed. Please try again.'));
+      } else {
+        emit(ReceiptProcessing(scanId: event.scanId, status: scan.status));
+        _schedulePollTick(event.scanId, event.attempt + 1, 0, _pollingInterval);
+      }
+    } catch (e) {
+      final errors = event.consecutiveErrors + 1;
+
+      if (errors >= _maxConsecutiveErrors) {
+        _pollingTimer?.cancel();
+        emit(ReceiptScannerFailure('Network error: Unable to check status. Error: $e'));
         return;
       }
 
-      try {
-        final scan = await getReceiptDetailsUseCase(event.scanId);
-        consecutiveErrors = 0; // Reset on success
-
-        if (scan.isCompleted) {
-          _pollingTimer?.cancel();
-          emit(ReceiptDetailsLoaded(scan));
-        } else if (scan.isFailed) {
-          _pollingTimer?.cancel();
-          emit(const ReceiptScannerFailure('Receipt processing failed. Please try again.'));
-        } else {
-          emit(ReceiptProcessing(scanId: event.scanId, status: scan.status));
-          attempts++;
-          _pollingTimer = Timer(_pollingInterval, poll);
-        }
-      } catch (e) {
-        consecutiveErrors++;
-        attempts++;
-
-        // If too many consecutive errors, show error to user
-        if (consecutiveErrors >= maxConsecutiveErrors) {
-          _pollingTimer?.cancel();
-          emit(ReceiptScannerFailure('Network error: Unable to check status. Error: $e'));
-          return;
-        }
-
-        // Otherwise keep trying with exponential backoff
-        final backoffDuration = Duration(
-          milliseconds: _pollingInterval.inMilliseconds * (consecutiveErrors + 1),
-        );
-        _pollingTimer = Timer(backoffDuration, poll);
-      }
+      // Exponential backoff on errors
+      final backoffDuration = Duration(
+        milliseconds: _pollingInterval.inMilliseconds * (errors + 1),
+      );
+      _schedulePollTick(event.scanId, event.attempt + 1, errors, backoffDuration);
     }
+  }
 
-    await poll();
+  void _schedulePollTick(String scanId, int attempt, int consecutiveErrors, Duration delay) {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer(delay, () {
+      add(_PollTickRequested(
+        scanId: scanId,
+        attempt: attempt,
+        consecutiveErrors: consecutiveErrors,
+      ));
+    });
   }
 
   void _onStopPolling(

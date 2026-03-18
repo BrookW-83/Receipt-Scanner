@@ -107,12 +107,31 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
     );
   }
 
+  int _statusLevel() {
+    switch (widget.status.toLowerCase()) {
+      case 'pending':
+        return 0;
+      case 'processing':
+        return 1;
+      case 'matching':
+        return 2;
+      case 'calculating':
+        return 3;
+      default:
+        return 0;
+    }
+  }
+
   IconData _getStatusIcon() {
     switch (widget.status.toLowerCase()) {
       case 'pending':
         return Icons.hourglass_top;
       case 'processing':
         return Icons.auto_awesome;
+      case 'matching':
+        return Icons.compare_arrows;
+      case 'calculating':
+        return Icons.calculate;
       default:
         return Icons.receipt_long;
     }
@@ -124,6 +143,10 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
         return 'In Queue';
       case 'processing':
         return 'Analyzing Receipt';
+      case 'matching':
+        return 'Matching Products';
+      case 'calculating':
+        return 'Calculating Savings';
       default:
         return 'Processing';
     }
@@ -134,18 +157,23 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
       case 'pending':
         return 'Your receipt is waiting to be processed.\nThis usually takes a few seconds.';
       case 'processing':
-        return 'AI is extracting items and matching products.\nCalculating your savings...';
+        return 'AI is reading your receipt...\nThis may take 10-15 seconds.';
+      case 'matching':
+        return 'Matching items to products in our database...';
+      case 'calculating':
+        return 'Calculating your potential savings...';
       default:
         return 'Please wait while we process your receipt.';
     }
   }
 
   Widget _buildProcessingSteps() {
+    final level = _statusLevel();
     final steps = [
       ('Upload', Icons.cloud_upload, true),
-      ('Extract', Icons.document_scanner, widget.status != 'pending'),
-      ('Match', Icons.compare_arrows, false),
-      ('Calculate', Icons.calculate, false),
+      ('Extract', Icons.document_scanner, level >= 1),
+      ('Match', Icons.compare_arrows, level >= 2),
+      ('Calculate', Icons.calculate, level >= 3),
     ];
 
     return Row(

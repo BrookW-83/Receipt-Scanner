@@ -18,23 +18,51 @@ class ScanResultScreen extends StatefulWidget {
 }
 
 class _ScanResultScreenState extends State<ScanResultScreen> {
+  // Animation: when completed, cycle through remaining steps before showing results
+  bool _animatingCompletion = false;
+  String _animatedStatus = 'pending';
+  ReceiptScanEntity? _completedScan;
+  late final ReceiptScannerBloc _bloc;
+
   @override
   void initState() {
     super.initState();
+    _bloc = context.read<ReceiptScannerBloc>();
     // Start polling for status updates
-    context.read<ReceiptScannerBloc>().add(PollReceiptStatusRequested(widget.scanId));
+    _bloc.add(PollReceiptStatusRequested(widget.scanId));
   }
 
   @override
   void dispose() {
-    // Stop polling when leaving the screen
-    context.read<ReceiptScannerBloc>().add(StopPollingRequested());
+    // Stop polling when leaving the screen (safe — uses cached reference)
+    _bloc.add(StopPollingRequested());
     super.dispose();
+  }
+
+  void _startCompletionAnimation(ReceiptScanEntity scan) async {
+    if (_animatingCompletion) return;
+    _animatingCompletion = true;
+    _completedScan = scan;
+
+    setState(() => _animatedStatus = 'matching');
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    setState(() => _animatedStatus = 'calculating');
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    setState(() {
+      _animatingCompletion = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ReceiptScannerBloc, ReceiptScannerState>(
+    return BlocConsumer<ReceiptScannerBloc, ReceiptScannerState>(
+      listener: (context, state) {
+        if (state is ReceiptDetailsLoaded && !_animatingCompletion && _completedScan == null) {
+          _startCompletionAnimation(state.scan);
+        }
+      },
       builder: (context, state) {
         return Scaffold(
           appBar: AppBar(
@@ -42,7 +70,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
-                context.read<ReceiptScannerBloc>().add(StopPollingRequested());
+                _bloc.add(StopPollingRequested());
                 context.go('/');
               },
             ),
@@ -58,6 +86,14 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       return ProcessingIndicator(
         status: state.status,
         scanId: state.scanId,
+      );
+    }
+
+    // Show animation steps before revealing results
+    if (_animatingCompletion) {
+      return ProcessingIndicator(
+        status: _animatedStatus,
+        scanId: widget.scanId,
       );
     }
 
