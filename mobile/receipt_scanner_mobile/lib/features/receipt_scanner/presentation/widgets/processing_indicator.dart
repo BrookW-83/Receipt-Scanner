@@ -19,6 +19,11 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
+  /// Primary green - rgba(72, 199, 116, 1)
+  static const Color primaryGreen = Color(0xFF48C774);
+  /// Secondary green - rgba(171, 222, 188, 1)
+  static const Color secondaryGreen = Color(0xFFABDEBC);
+
   @override
   void initState() {
     super.initState();
@@ -54,14 +59,14 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
                   scale: _scaleAnimation.value,
                   child: Container(
                     padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
+                    decoration: const BoxDecoration(
+                      color: secondaryGreen,
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       _getStatusIcon(),
                       size: 64,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      color: primaryGreen,
                     ),
                   ),
                 );
@@ -92,9 +97,7 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
               width: 200,
               child: LinearProgressIndicator(
                 backgroundColor: Colors.grey.shade200,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Theme.of(context).colorScheme.primary,
-                ),
+                valueColor: const AlwaysStoppedAnimation<Color>(primaryGreen),
               ),
             ),
             const SizedBox(height: 16),
@@ -113,6 +116,10 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
         return 0;
       case 'processing':
         return 1;
+      case 'awaiting_review':
+        return 1;
+      case 'confirming':
+        return 2;
       case 'matching':
         return 2;
       case 'calculating':
@@ -128,6 +135,10 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
         return Icons.hourglass_top;
       case 'processing':
         return Icons.auto_awesome;
+      case 'awaiting_review':
+        return Icons.rate_review;
+      case 'confirming':
+        return Icons.check_circle_outline;
       case 'matching':
         return Icons.compare_arrows;
       case 'calculating':
@@ -143,6 +154,10 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
         return 'In Queue';
       case 'processing':
         return 'Analyzing Receipt';
+      case 'awaiting_review':
+        return 'Ready for Review';
+      case 'confirming':
+        return 'Confirming Items';
       case 'matching':
         return 'Matching Products';
       case 'calculating':
@@ -158,6 +173,10 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
         return 'Your receipt is waiting to be processed.\nThis usually takes a few seconds.';
       case 'processing':
         return 'AI is reading your receipt...\nThis may take 10-15 seconds.';
+      case 'awaiting_review':
+        return 'Please review the extracted items.';
+      case 'confirming':
+        return 'Starting product matching...';
       case 'matching':
         return 'Matching items to products in our database...';
       case 'calculating':
@@ -191,9 +210,7 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: isActive
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade300,
+                    color: isActive ? primaryGreen : Colors.grey.shade300,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -207,9 +224,7 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
                   step.$1,
                   style: TextStyle(
                     fontSize: 10,
-                    color: isActive
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey.shade500,
+                    color: isActive ? primaryGreen : Colors.grey.shade500,
                     fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -220,7 +235,7 @@ class _ProcessingIndicatorState extends State<ProcessingIndicator>
                 width: 24,
                 height: 2,
                 margin: const EdgeInsets.only(bottom: 16),
-                color: isActive ? Theme.of(context).colorScheme.primary : Colors.grey.shade300,
+                color: isActive ? primaryGreen : Colors.grey.shade300,
               ),
           ],
         );

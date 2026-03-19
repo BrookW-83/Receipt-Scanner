@@ -51,5 +51,6 @@ Future<void> initReceiptScannerModule(
         getReceiptDetailsUseCase: sl(),
         captureImageUseCase: sl(),
         getRecentScansUseCase: sl(),
+        repository: sl(),
       ));
 }
