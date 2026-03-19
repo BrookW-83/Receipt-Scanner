@@ -55,6 +55,37 @@ class ReceiptItemSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class ExtractedItemSerializer(serializers.ModelSerializer):
+    """Extracted item for user review (before matching)."""
+
+    class Meta:
+        model = ReceiptItem
+        fields = (
+            'id',
+            'line_number',
+            'description',
+            'quantity',
+            'unit_price',
+            'total_price',
+        )
+        read_only_fields = fields
+
+
+class ExtractedItemUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating extracted items."""
+
+    class Meta:
+        model = ReceiptItem
+        fields = ('id', 'description', 'quantity', 'unit_price', 'total_price')
+        read_only_fields = ('id',)
+
+
+class ExtractedItemsBulkUpdateSerializer(serializers.Serializer):
+    """Serializer for bulk updating extracted items."""
+
+    items = ExtractedItemUpdateSerializer(many=True)
+
+
 # =============================================================================
 # RECEIPT SCAN SERIALIZERS
 # =============================================================================

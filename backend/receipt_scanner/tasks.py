@@ -1,13 +1,19 @@
 """
 Celery Tasks for Receipt Scanner
 
-Main pipeline:
+Split Pipeline:
+Task 1 (extract_receipt_task):
 1. Extract receipt data via Gemini Vision
-2. Match items to products via trigram similarity
-3. Calculate savings vs current deals
-4. Check for missed promos on purchase date
-5. Create PriceWatch entries (30-day expiry)
-6. Queue notifications for missed promos
+2. Normalize item descriptions
+3. Create ReceiptItem records
+4. Set status to AWAITING_REVIEW (pause for user review)
+
+Task 2 (process_receipt_items_task) - triggered after user confirms:
+1. Match items to products via trigram similarity
+2. Calculate savings vs current deals
+3. Check for missed promos on purchase date
+4. Create PriceWatch entries (30-day expiry)
+5. Queue notifications for missed promos
 """
 
 import logging
@@ -33,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# MAIN RECEIPT PROCESSING TASK
+# TASK 1: EXTRACTION (triggered on upload)
 # =============================================================================
 
 @shared_task(
@@ -45,19 +51,19 @@ logger = logging.getLogger(__name__)
     max_retries=2,
     rate_limit='10/m'  # 10 requests per minute (Gemini rate limit)
 )
-def process_receipt_scan_task(self, scan_id: str) -> str:
+def extract_receipt_task(self, scan_id: str) -> str:
     """
-    Main task to process a receipt scan.
+    Task 1: Extract data from receipt image.
 
     Pipeline:
     1. Extract data from image using Gemini Vision
-    2. Match items to products using trigram similarity
-    3. Calculate savings against current deals
-    4. Check for missed promotions on purchase date
-    5. Create PriceWatch entries for matched items
-    6. Queue notifications for missed promos
+    2. Normalize item descriptions
+    3. Create ReceiptItem records (extracted data only, no matching)
+    4. Set status to AWAITING_REVIEW
+
+    User can then review/edit items before confirming.
     """
-    logger.info(f"Processing receipt scan: {scan_id}")
+    logger.info(f"Extracting receipt scan: {scan_id}")
 
     # Get scan
     try:
@@ -66,9 +72,13 @@ def process_receipt_scan_task(self, scan_id: str) -> str:
         logger.error(f"Scan {scan_id} not found")
         return f"Scan {scan_id} not found"
 
-    # Skip if already completed
-    if scan.status == ReceiptScan.Status.COMPLETED:
-        return f"Scan {scan_id} already completed"
+    # Skip if already past extraction
+    if scan.status in [
+        ReceiptScan.Status.AWAITING_REVIEW,
+        ReceiptScan.Status.MATCHING,
+        ReceiptScan.Status.COMPLETED
+    ]:
+        return f"Scan {scan_id} already extracted (status: {scan.status})"
 
     # Update to processing
     scan.status = ReceiptScan.Status.PROCESSING
@@ -100,27 +110,17 @@ def process_receipt_scan_task(self, scan_id: str) -> str:
             except ValueError:
                 logger.warning(f"Invalid date format: {extracted.purchase_date}")
 
-        scan.status = ReceiptScan.Status.MATCHING
-        scan.save()
-
         logger.info(f"Scan {scan_id}: Extracted {len(extracted.items)} items")
 
         # =====================================================================
-        # STEP 2-6: PROCESS ITEMS IN A TRANSACTION
+        # STEP 2: CREATE RECEIPT ITEMS (extracted data only, no matching)
         # =====================================================================
         with transaction.atomic():
             # Delete existing items and create new ones
             ReceiptItem.objects.filter(scan=scan).delete()
 
-            # Get descriptions for batch matching
-            descriptions = [item.description for item in extracted.items]
-            matches = match_products_trigram(descriptions)
-
-            items_data = []
             for item in extracted.items:
-                best_match = get_best_match(matches.get(item.description, []))
-
-                receipt_item = ReceiptItem.objects.create(
+                ReceiptItem.objects.create(
                     scan=scan,
                     line_number=item.line_number,
                     description=item.description,
@@ -128,28 +128,126 @@ def process_receipt_scan_task(self, scan_id: str) -> str:
                     quantity=Decimal(str(item.quantity)),
                     unit_price=Decimal(str(item.unit_price)) if item.unit_price else None,
                     total_price=Decimal(str(item.total_price)) if item.total_price else None,
-                    matched_product_id=best_match['product_id'] if best_match else None,
-                    matched_product_name=best_match['name'] if best_match else '',
-                    confidence_score=Decimal(str(best_match['score'])) if best_match else None,
-                    match_confidence=best_match['confidence'] if best_match else 'no_match'
+                    # Matching fields left empty - will be filled after user confirms
+                    matched_product_id=None,
+                    matched_product_name='',
+                    confidence_score=None,
+                    match_confidence='no_match'
                 )
 
+            # Set status to AWAITING_REVIEW - pause here for user review
+            scan.status = ReceiptScan.Status.AWAITING_REVIEW
+            scan.save()
+
+        logger.info(f"Scan {scan_id}: Extraction complete, awaiting user review")
+        return f"Scan {scan_id} extracted, awaiting review"
+
+    except GeminiAPIError:
+        # Re-raise for Celery retry
+        scan.status = ReceiptScan.Status.PENDING  # Reset for retry
+        scan.save(update_fields=['status'])
+        raise
+
+    except Exception as e:
+        logger.exception(f"Scan {scan_id} extraction failed: {e}")
+        scan.status = ReceiptScan.Status.FAILED
+        scan.error_message = str(e)
+        scan.save(update_fields=['status', 'error_message', 'updated_at'])
+        raise
+
+
+# =============================================================================
+# TASK 2: PROCESSING (triggered after user confirms)
+# =============================================================================
+
+@shared_task(
+    bind=True,
+    autoretry_for=(DatabaseError,),
+    retry_backoff=60,
+    max_retries=3,
+)
+def process_receipt_items_task(self, scan_id: str) -> str:
+    """
+    Task 2: Process receipt items after user confirmation.
+
+    Pipeline:
+    1. Match items to products using trigram similarity
+    2. Calculate savings against current deals
+    3. Check for missed promotions on purchase date
+    4. Create PriceWatch entries for matched items
+    5. Queue notifications for missed promos
+    """
+    logger.info(f"Processing receipt items: {scan_id}")
+
+    # Get scan
+    try:
+        scan = ReceiptScan.objects.get(id=scan_id)
+    except ReceiptScan.DoesNotExist:
+        logger.error(f"Scan {scan_id} not found")
+        return f"Scan {scan_id} not found"
+
+    # Only process if status is AWAITING_REVIEW
+    if scan.status == ReceiptScan.Status.COMPLETED:
+        return f"Scan {scan_id} already completed"
+
+    if scan.status != ReceiptScan.Status.AWAITING_REVIEW:
+        logger.warning(f"Scan {scan_id} has unexpected status: {scan.status}")
+        # Allow processing anyway if items exist
+
+    # Update to matching
+    scan.status = ReceiptScan.Status.MATCHING
+    scan.save(update_fields=['status', 'updated_at'])
+
+    try:
+        with transaction.atomic():
+            # Get all items for this scan
+            items = list(ReceiptItem.objects.filter(scan=scan))
+
+            if not items:
+                logger.warning(f"Scan {scan_id} has no items")
+                scan.status = ReceiptScan.Status.COMPLETED
+                scan.save(update_fields=['status', 'updated_at'])
+                return f"Scan {scan_id} completed (no items)"
+
+            # =====================================================================
+            # STEP 1: MATCH ITEMS TO PRODUCTS
+            # =====================================================================
+            descriptions = [item.description for item in items]
+            matches = match_products_trigram(descriptions)
+
+            items_data = []
+            for item in items:
+                best_match = get_best_match(matches.get(item.description, []))
+
+                # Update item with matching data
+                item.matched_product_id = best_match['product_id'] if best_match else None
+                item.matched_product_name = best_match['name'] if best_match else ''
+                item.confidence_score = Decimal(str(best_match['score'])) if best_match else None
+                item.match_confidence = best_match['confidence'] if best_match else 'no_match'
+                item.save()
+
                 items_data.append({
-                    'id': str(receipt_item.id),
-                    'matched_product_id': receipt_item.matched_product_id,
-                    'unit_price': receipt_item.unit_price,
-                    'quantity': receipt_item.quantity
+                    'id': str(item.id),
+                    'matched_product_id': item.matched_product_id,
+                    'unit_price': item.unit_price,
+                    'quantity': item.quantity
                 })
 
             logger.info(f"Scan {scan_id}: Matched {sum(1 for i in items_data if i['matched_product_id'])} items")
 
-            # Calculate savings
+            # =====================================================================
+            # STEP 2: CALCULATE SAVINGS
+            # =====================================================================
             savings_result = calculate_receipt_savings(items_data)
 
-            # Check for missed promos
+            # =====================================================================
+            # STEP 3: CHECK FOR MISSED PROMOS
+            # =====================================================================
             promo_result = check_receipt_promos(items_data, scan.purchase_date)
 
-            # Update items with savings & promo info
+            # =====================================================================
+            # STEP 4: UPDATE ITEMS WITH SAVINGS & PROMO INFO
+            # =====================================================================
             total_savings = Decimal('0')
             total_missed = Decimal('0')
             matched_count = 0
@@ -200,7 +298,7 @@ def process_receipt_scan_task(self, scan_id: str) -> str:
         )
 
         # =====================================================================
-        # STEP 7: CREATE PRICE WATCHES FOR MATCHED ITEMS
+        # STEP 5: CREATE PRICE WATCHES FOR MATCHED ITEMS
         # =====================================================================
         watches_created = 0
         for item in ReceiptItem.objects.filter(scan=scan, matched_product_id__isnull=False):
@@ -228,7 +326,7 @@ def process_receipt_scan_task(self, scan_id: str) -> str:
         logger.info(f"Scan {scan_id}: Created {watches_created} price watches")
 
         # =====================================================================
-        # STEP 8: QUEUE MISSED PROMO NOTIFICATIONS (only if user exists)
+        # STEP 6: QUEUE MISSED PROMO NOTIFICATIONS (only if user exists)
         # =====================================================================
         if total_missed > 0 and scan.user_id:
             # Find the item with highest missed savings for notification
@@ -253,18 +351,52 @@ def process_receipt_scan_task(self, scan_id: str) -> str:
 
         return f"Scan {scan_id} completed successfully"
 
-    except GeminiAPIError:
-        # Re-raise for Celery retry
-        scan.status = ReceiptScan.Status.PENDING  # Reset for retry
-        scan.save(update_fields=['status'])
-        raise
-
     except Exception as e:
-        logger.exception(f"Scan {scan_id} failed: {e}")
+        logger.exception(f"Scan {scan_id} processing failed: {e}")
         scan.status = ReceiptScan.Status.FAILED
         scan.error_message = str(e)
         scan.save(update_fields=['status', 'error_message', 'updated_at'])
         raise
+
+
+# =============================================================================
+# LEGACY TASK (for backwards compatibility / reprocessing)
+# =============================================================================
+
+@shared_task(
+    bind=True,
+    autoretry_for=(GeminiAPIError, DatabaseError),
+    retry_backoff=300,
+    retry_backoff_max=172800,
+    retry_jitter=True,
+    max_retries=2,
+    rate_limit='10/m'
+)
+def process_receipt_scan_task(self, scan_id: str) -> str:
+    """
+    Legacy task: Full pipeline (extract + process) in one go.
+
+    Used for reprocessing failed scans or when user wants to skip review.
+    Calls extract_receipt_task then process_receipt_items_task.
+    """
+    logger.info(f"Full processing receipt scan: {scan_id}")
+
+    # Run extraction
+    extract_result = extract_receipt_task(scan_id)
+    logger.info(f"Extraction result: {extract_result}")
+
+    # Check if extraction succeeded
+    try:
+        scan = ReceiptScan.objects.get(id=scan_id)
+        if scan.status == ReceiptScan.Status.AWAITING_REVIEW:
+            # Run processing immediately (skip user review)
+            return process_receipt_items_task(scan_id)
+        elif scan.status == ReceiptScan.Status.FAILED:
+            return f"Scan {scan_id} extraction failed"
+        else:
+            return f"Scan {scan_id} in unexpected state: {scan.status}"
+    except ReceiptScan.DoesNotExist:
+        return f"Scan {scan_id} not found"
 
 
 # =============================================================================

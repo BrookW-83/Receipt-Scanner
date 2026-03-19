@@ -81,6 +81,7 @@ class ReceiptScan(models.Model):
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'
         PROCESSING = 'processing', 'Processing'
+        AWAITING_REVIEW = 'awaiting_review', 'Awaiting Review'
         MATCHING = 'matching', 'Matching Products'
         COMPLETED = 'completed', 'Completed'
         FAILED = 'failed', 'Failed'

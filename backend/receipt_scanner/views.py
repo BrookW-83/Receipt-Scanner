@@ -2,7 +2,7 @@
 Views for Receipt Scanner API
 
 Endpoints:
-- ReceiptScan CRUD + reprocess
+- ReceiptScan CRUD + reprocess + extracted items review
 - PriceWatch list/deactivate
 - UserDevice register/unregister
 - Notification list/mark read
@@ -11,6 +11,8 @@ Endpoints:
 Authentication is optional for testing. When authenticated, user data is
 associated with requests. When not authenticated, user fields are left null.
 """
+
+from decimal import Decimal
 
 from rest_framework import viewsets, generics, status
 from rest_framework.decorators import api_view, permission_classes, action
@@ -21,6 +23,7 @@ from django.utils import timezone
 
 from .models import (
     ReceiptScan,
+    ReceiptItem,
     PriceWatch,
     UserDevice,
     Notification,
@@ -30,13 +33,15 @@ from .serializers import (
     ReceiptScanSerializer,
     ReceiptScanCreateSerializer,
     ReceiptScanListSerializer,
+    ExtractedItemSerializer,
     PriceWatchSerializer,
     UserDeviceSerializer,
     UserDeviceCreateSerializer,
     NotificationSerializer,
     NotificationPreferenceSerializer,
 )
-from .tasks import process_receipt_scan_task
+from .tasks import extract_receipt_task, process_receipt_items_task, process_receipt_scan_task
+from .services.product_matcher import normalize_product_name
 
 
 # =============================================================================
@@ -109,7 +114,7 @@ class ReceiptScanViewSet(viewsets.ModelViewSet):
         return ReceiptScanSerializer
 
     def create(self, request, *args, **kwargs):
-        """Upload a new receipt and queue for processing."""
+        """Upload a new receipt and queue for extraction."""
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -119,24 +124,140 @@ class ReceiptScanViewSet(viewsets.ModelViewSet):
             status=ReceiptScan.Status.PENDING,
         )
 
-        # Queue async processing
-        process_receipt_scan_task.delay(str(scan.id))
+        # Queue async extraction (pauses at AWAITING_REVIEW for user review)
+        extract_receipt_task.delay(str(scan.id))
 
         output = ReceiptScanSerializer(scan, context={'request': request})
         return Response(output.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
     def reprocess(self, request, pk=None):
-        """Requeue a scan for processing."""
+        """Requeue a scan for full processing (extract + match)."""
         scan = self.get_object()
         scan.status = ReceiptScan.Status.PENDING
         scan.error_message = ''
         scan.save(update_fields=['status', 'error_message', 'updated_at'])
 
+        # Use legacy task that does full pipeline
         process_receipt_scan_task.delay(str(scan.id))
 
         return Response(
             {'detail': 'reprocess queued'},
+            status=status.HTTP_202_ACCEPTED
+        )
+
+    @action(detail=True, methods=['get'], url_path='extracted-items')
+    def extracted_items(self, request, pk=None):
+        """
+        Get extracted items for user review.
+
+        Only available when scan status is AWAITING_REVIEW.
+        """
+        scan = self.get_object()
+
+        # Allow viewing extracted items in AWAITING_REVIEW status
+        if scan.status != ReceiptScan.Status.AWAITING_REVIEW:
+            return Response(
+                {'detail': f'Scan must be in awaiting_review status, current status: {scan.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        items = scan.items.all().order_by('line_number')
+
+        return Response({
+            'scan_id': str(scan.id),
+            'merchant_name': scan.merchant_name,
+            'purchase_date': scan.purchase_date,
+            'subtotal': scan.subtotal,
+            'tax': scan.tax,
+            'total': scan.total,
+            'currency': scan.currency,
+            'items': ExtractedItemSerializer(items, many=True).data
+        })
+
+    @action(detail=True, methods=['patch'], url_path='extracted-items')
+    def update_extracted_items(self, request, pk=None):
+        """
+        Edit extracted items before processing.
+
+        Only available when scan status is AWAITING_REVIEW.
+        Accepts: {"items": [{"id": "uuid", "description": "...", ...}, ...]}
+        """
+        scan = self.get_object()
+
+        # Only allow editing in AWAITING_REVIEW status
+        if scan.status != ReceiptScan.Status.AWAITING_REVIEW:
+            return Response(
+                {'detail': f'Scan must be in awaiting_review status, current status: {scan.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        items_data = request.data.get('items', [])
+        if not items_data:
+            return Response(
+                {'detail': 'No items provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        updated_items = []
+        errors = []
+
+        for item_data in items_data:
+            item_id = item_data.get('id')
+            if not item_id:
+                errors.append({'error': 'Item id is required'})
+                continue
+
+            try:
+                item = ReceiptItem.objects.get(id=item_id, scan=scan)
+            except ReceiptItem.DoesNotExist:
+                errors.append({'id': item_id, 'error': 'Item not found'})
+                continue
+
+            # Update editable fields
+            if 'description' in item_data:
+                item.description = item_data['description']
+                item.normalized_description = normalize_product_name(item_data['description'])
+            if 'quantity' in item_data:
+                item.quantity = Decimal(str(item_data['quantity']))
+            if 'unit_price' in item_data:
+                item.unit_price = Decimal(str(item_data['unit_price'])) if item_data['unit_price'] is not None else None
+            if 'total_price' in item_data:
+                item.total_price = Decimal(str(item_data['total_price'])) if item_data['total_price'] is not None else None
+
+            item.save()
+            updated_items.append(str(item.id))
+
+        response_data = {
+            'detail': f'Updated {len(updated_items)} items',
+            'updated_item_ids': updated_items
+        }
+        if errors:
+            response_data['errors'] = errors
+
+        return Response(response_data)
+
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk=None):
+        """
+        Confirm extracted items and trigger product matching.
+
+        Only available when scan status is AWAITING_REVIEW.
+        """
+        scan = self.get_object()
+
+        # Only allow confirming in AWAITING_REVIEW status
+        if scan.status != ReceiptScan.Status.AWAITING_REVIEW:
+            return Response(
+                {'detail': f'Scan must be in awaiting_review status, current status: {scan.status}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Queue processing task (matching, savings, promos)
+        process_receipt_items_task.delay(str(scan.id))
+
+        return Response(
+            {'detail': 'Processing started', 'scan_id': str(scan.id)},
             status=status.HTTP_202_ACCEPTED
         )
 
