@@ -35,6 +35,7 @@ class ReceiptScanEntity extends Equatable {
   });
 
   bool get isProcessing => status == 'pending' || status == 'processing' || status == 'matching';
+  bool get isAwaitingReview => status == 'awaiting_review';
   bool get isCompleted => status == 'completed';
   bool get isFailed => status == 'failed';
   bool get hasSavings => (totalSavings ?? 0) > 0;

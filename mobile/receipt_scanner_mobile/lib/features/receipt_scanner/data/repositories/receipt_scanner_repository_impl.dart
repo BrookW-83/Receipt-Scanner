@@ -3,6 +3,7 @@ import '../../domain/entities/receipt_scan_entity.dart';
 import '../../domain/repositories/receipt_scanner_repository.dart';
 import '../datasources/receipt_scanner_remote_data_source.dart';
 import '../datasources/receipt_scanner_local_data_source.dart';
+import '../models/extracted_items_response.dart';
 
 class ReceiptScannerRepositoryImpl implements ReceiptScannerRepository {
   final ReceiptScannerRemoteDataSource remote;
@@ -36,5 +37,20 @@ class ReceiptScannerRepositoryImpl implements ReceiptScannerRepository {
   @override
   Future<XFile?> pickFromGallery() {
     return local.pickFromGallery();
+  }
+
+  @override
+  Future<ExtractedItemsResponse> getExtractedItems(String scanId) {
+    return remote.getExtractedItems(scanId);
+  }
+
+  @override
+  Future<void> updateExtractedItems(String scanId, List<Map<String, dynamic>> items) {
+    return remote.updateExtractedItems(scanId, items);
+  }
+
+  @override
+  Future<void> confirmExtractedItems(String scanId) {
+    return remote.confirmExtractedItems(scanId);
   }
 }

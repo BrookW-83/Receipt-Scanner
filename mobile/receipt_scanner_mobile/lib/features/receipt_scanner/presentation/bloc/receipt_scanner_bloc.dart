@@ -3,10 +3,13 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../domain/entities/receipt_scan_entity.dart';
+import '../../domain/entities/receipt_item_entity.dart';
 import '../../domain/usecases/upload_receipt_usecase.dart';
 import '../../domain/usecases/get_receipt_details_usecase.dart';
 import '../../domain/usecases/capture_image_usecase.dart';
 import '../../domain/usecases/get_recent_scans_usecase.dart';
+import '../../domain/repositories/receipt_scanner_repository.dart';
+import '../../data/models/extracted_items_response.dart';
 
 // ============================================================================
 // EVENTS
@@ -76,6 +79,46 @@ class StopPollingRequested extends ReceiptScannerEvent {}
 class LoadRecentScansRequested extends ReceiptScannerEvent {}
 
 class ResetStateRequested extends ReceiptScannerEvent {}
+
+// Extracted items review events
+class FetchExtractedItemsRequested extends ReceiptScannerEvent {
+  final String scanId;
+
+  const FetchExtractedItemsRequested(this.scanId);
+
+  @override
+  List<Object?> get props => [scanId];
+}
+
+class UpdateExtractedItemRequested extends ReceiptScannerEvent {
+  final String scanId;
+  final String itemId;
+  final String? description;
+  final num? quantity;
+  final num? unitPrice;
+  final num? totalPrice;
+
+  const UpdateExtractedItemRequested({
+    required this.scanId,
+    required this.itemId,
+    this.description,
+    this.quantity,
+    this.unitPrice,
+    this.totalPrice,
+  });
+
+  @override
+  List<Object?> get props => [scanId, itemId, description, quantity, unitPrice, totalPrice];
+}
+
+class ConfirmExtractedItemsRequested extends ReceiptScannerEvent {
+  final String scanId;
+
+  const ConfirmExtractedItemsRequested(this.scanId);
+
+  @override
+  List<Object?> get props => [scanId];
+}
 
 // ============================================================================
 // STATES
@@ -163,6 +206,72 @@ class ReceiptScannerFailure extends ReceiptScannerState {
   List<Object?> get props => [message];
 }
 
+// Extracted items review states
+class ExtractedItemsLoaded extends ReceiptScannerState {
+  final String scanId;
+  final String merchantName;
+  final DateTime? purchaseDate;
+  final num? subtotal;
+  final num? tax;
+  final num? total;
+  final String currency;
+  final List<ReceiptItemEntity> items;
+
+  const ExtractedItemsLoaded({
+    required this.scanId,
+    required this.merchantName,
+    this.purchaseDate,
+    this.subtotal,
+    this.tax,
+    this.total,
+    required this.currency,
+    required this.items,
+  });
+
+  @override
+  List<Object?> get props => [scanId, merchantName, purchaseDate, subtotal, tax, total, currency, items];
+
+  ExtractedItemsLoaded copyWith({
+    String? scanId,
+    String? merchantName,
+    DateTime? purchaseDate,
+    num? subtotal,
+    num? tax,
+    num? total,
+    String? currency,
+    List<ReceiptItemEntity>? items,
+  }) {
+    return ExtractedItemsLoaded(
+      scanId: scanId ?? this.scanId,
+      merchantName: merchantName ?? this.merchantName,
+      purchaseDate: purchaseDate ?? this.purchaseDate,
+      subtotal: subtotal ?? this.subtotal,
+      tax: tax ?? this.tax,
+      total: total ?? this.total,
+      currency: currency ?? this.currency,
+      items: items ?? this.items,
+    );
+  }
+}
+
+class ExtractedItemsUpdating extends ReceiptScannerState {
+  final ExtractedItemsLoaded previousState;
+
+  const ExtractedItemsUpdating(this.previousState);
+
+  @override
+  List<Object?> get props => [previousState];
+}
+
+class ExtractedItemsConfirming extends ReceiptScannerState {
+  final String scanId;
+
+  const ExtractedItemsConfirming(this.scanId);
+
+  @override
+  List<Object?> get props => [scanId];
+}
+
 // ============================================================================
 // BLOC
 // ============================================================================
@@ -172,6 +281,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
   final GetReceiptDetailsUseCase getReceiptDetailsUseCase;
   final CaptureImageUseCase captureImageUseCase;
   final GetRecentScansUseCase getRecentScansUseCase;
+  final ReceiptScannerRepository repository;
 
   Timer? _pollingTimer;
   static const _pollingInterval = Duration(seconds: 2);
@@ -183,6 +293,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
     required this.getReceiptDetailsUseCase,
     required this.captureImageUseCase,
     required this.getRecentScansUseCase,
+    required this.repository,
   }) : super(ReceiptScannerInitial()) {
     on<CaptureImageRequested>(_onCaptureImage);
     on<UploadReceiptRequested>(_onUpload);
@@ -192,6 +303,9 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
     on<StopPollingRequested>(_onStopPolling);
     on<LoadRecentScansRequested>(_onLoadRecentScans);
     on<ResetStateRequested>(_onResetState);
+    on<FetchExtractedItemsRequested>(_onFetchExtractedItems);
+    on<UpdateExtractedItemRequested>(_onUpdateExtractedItem);
+    on<ConfirmExtractedItemsRequested>(_onConfirmExtractedItems);
   }
 
   Future<void> _onCaptureImage(
@@ -269,6 +383,10 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
       } else if (scan.isFailed) {
         _pollingTimer?.cancel();
         emit(const ReceiptScannerFailure('Receipt processing failed. Please try again.'));
+      } else if (scan.isAwaitingReview) {
+        // Stop polling and fetch extracted items for review
+        _pollingTimer?.cancel();
+        add(FetchExtractedItemsRequested(event.scanId));
       } else {
         emit(ReceiptProcessing(scanId: event.scanId, status: scan.status));
         _schedulePollTick(event.scanId, event.attempt + 1, 0, _pollingInterval);
@@ -327,6 +445,81 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
   ) {
     _pollingTimer?.cancel();
     emit(ReceiptScannerInitial());
+  }
+
+  Future<void> _onFetchExtractedItems(
+    FetchExtractedItemsRequested event,
+    Emitter<ReceiptScannerState> emit,
+  ) async {
+    emit(const ReceiptScannerLoading('Loading extracted items...'));
+    try {
+      final response = await repository.getExtractedItems(event.scanId);
+      emit(ExtractedItemsLoaded(
+        scanId: response.scanId,
+        merchantName: response.merchantName,
+        purchaseDate: response.purchaseDate,
+        subtotal: response.subtotal,
+        tax: response.tax,
+        total: response.total,
+        currency: response.currency,
+        items: response.items,
+      ));
+    } catch (e) {
+      emit(ReceiptScannerFailure('Failed to load extracted items: $e'));
+    }
+  }
+
+  Future<void> _onUpdateExtractedItem(
+    UpdateExtractedItemRequested event,
+    Emitter<ReceiptScannerState> emit,
+  ) async {
+    final currentState = state;
+    if (currentState is! ExtractedItemsLoaded) return;
+
+    emit(ExtractedItemsUpdating(currentState));
+
+    try {
+      // Build the update payload
+      final Map<String, dynamic> itemUpdate = {'id': event.itemId};
+      if (event.description != null) itemUpdate['description'] = event.description;
+      if (event.quantity != null) itemUpdate['quantity'] = event.quantity;
+      if (event.unitPrice != null) itemUpdate['unit_price'] = event.unitPrice;
+      if (event.totalPrice != null) itemUpdate['total_price'] = event.totalPrice;
+
+      await repository.updateExtractedItems(event.scanId, [itemUpdate]);
+
+      // Refresh the extracted items
+      final response = await repository.getExtractedItems(event.scanId);
+      emit(ExtractedItemsLoaded(
+        scanId: response.scanId,
+        merchantName: response.merchantName,
+        purchaseDate: response.purchaseDate,
+        subtotal: response.subtotal,
+        tax: response.tax,
+        total: response.total,
+        currency: response.currency,
+        items: response.items,
+      ));
+    } catch (e) {
+      // Restore previous state on error
+      emit(currentState);
+      emit(ReceiptScannerFailure('Failed to update item: $e'));
+    }
+  }
+
+  Future<void> _onConfirmExtractedItems(
+    ConfirmExtractedItemsRequested event,
+    Emitter<ReceiptScannerState> emit,
+  ) async {
+    emit(ExtractedItemsConfirming(event.scanId));
+
+    try {
+      await repository.confirmExtractedItems(event.scanId);
+      // Resume polling for matching/completion
+      add(PollReceiptStatusRequested(event.scanId));
+    } catch (e) {
+      emit(ReceiptScannerFailure('Failed to confirm items: $e'));
+    }
   }
 
   @override

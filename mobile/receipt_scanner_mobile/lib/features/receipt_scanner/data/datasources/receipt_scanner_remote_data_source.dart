@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:receipt_scanner_mobile/core/api/api_client.dart';
 import 'package:receipt_scanner_mobile/core/config/environment.dart';
 import '../models/receipt_scan_model.dart';
+import '../models/receipt_item_model.dart';
+import '../models/extracted_items_response.dart';
 
 abstract class ReceiptScannerRemoteDataSource {
   Future<ReceiptScanModel> uploadReceipt({
@@ -12,6 +14,15 @@ abstract class ReceiptScannerRemoteDataSource {
   Future<ReceiptScanModel> getReceiptDetails(String scanId);
 
   Future<List<ReceiptScanModel>> getRecentScans({int limit = 10});
+
+  /// Get extracted items for review (when status is awaiting_review)
+  Future<ExtractedItemsResponse> getExtractedItems(String scanId);
+
+  /// Update extracted items before processing
+  Future<void> updateExtractedItems(String scanId, List<Map<String, dynamic>> items);
+
+  /// Confirm extracted items and start processing
+  Future<void> confirmExtractedItems(String scanId);
 }
 
 class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSource {
@@ -73,5 +84,42 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
     return results
         .map((e) => ReceiptScanModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  @override
+  Future<ExtractedItemsResponse> getExtractedItems(String scanId) async {
+    final response = await apiClient.get(
+      uri: Uri.parse('${ReceiptScannerEnvironment.apiBaseUrl}receipt-scanner/scans/$scanId/extracted-items/'),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to get extracted items (${response.statusCode}): ${response.body}');
+    }
+
+    return ExtractedItemsResponse.fromJson(apiClient.parseJsonObject(response.body));
+  }
+
+  @override
+  Future<void> updateExtractedItems(String scanId, List<Map<String, dynamic>> items) async {
+    final response = await apiClient.patch(
+      uri: Uri.parse('${ReceiptScannerEnvironment.apiBaseUrl}receipt-scanner/scans/$scanId/extracted-items/'),
+      body: {'items': items},
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to update extracted items (${response.statusCode}): ${response.body}');
+    }
+  }
+
+  @override
+  Future<void> confirmExtractedItems(String scanId) async {
+    final response = await apiClient.post(
+      uri: Uri.parse('${ReceiptScannerEnvironment.apiBaseUrl}receipt-scanner/scans/$scanId/confirm/'),
+      body: {},
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Failed to confirm extracted items (${response.statusCode}): ${response.body}');
+    }
   }
 }
