@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../bloc/receipt_scanner_bloc.dart';
 import '../../domain/entities/receipt_scan_entity.dart';
-import '../widgets/receipt_item_card.dart';
-import '../widgets/savings_summary_card.dart';
 import '../widgets/processing_indicator.dart';
+import '../widgets/extracted_items_review.dart';
+import '../widgets/scan_results_view.dart';
+import '../widgets/scan_failed_view.dart';
 
 class ScanResultScreen extends StatefulWidget {
   final String scanId;
@@ -64,6 +64,74 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         }
       },
       builder: (context, state) {
+        // Show results view without AppBar (it has its own header)
+        if (state is ReceiptDetailsLoaded && !_animatingCompletion) {
+          return _buildReceiptDetails(context, state.scan);
+        }
+
+        // Show extracted items review (has its own Scaffold)
+        if (state is ExtractedItemsLoaded) {
+          return ExtractedItemsReview(
+            merchantName: state.merchantName,
+            purchaseDate: state.purchaseDate,
+            subtotal: state.subtotal,
+            tax: state.tax,
+            total: state.total,
+            currency: state.currency,
+            items: state.items,
+            isUpdating: false,
+            onItemUpdated: (itemId, {description, quantity, unitPrice, totalPrice}) {
+              context.read<ReceiptScannerBloc>().add(
+                    UpdateExtractedItemRequested(
+                      scanId: state.scanId,
+                      itemId: itemId,
+                      description: description,
+                      quantity: quantity,
+                      unitPrice: unitPrice,
+                      totalPrice: totalPrice,
+                    ),
+                  );
+            },
+            onConfirm: () {
+              context.read<ReceiptScannerBloc>().add(
+                    ConfirmExtractedItemsRequested(state.scanId),
+                  );
+            },
+          );
+        }
+
+        // Show extracted items with updating indicator (has its own Scaffold)
+        if (state is ExtractedItemsUpdating) {
+          return ExtractedItemsReview(
+            merchantName: state.previousState.merchantName,
+            purchaseDate: state.previousState.purchaseDate,
+            subtotal: state.previousState.subtotal,
+            tax: state.previousState.tax,
+            total: state.previousState.total,
+            currency: state.previousState.currency,
+            items: state.previousState.items,
+            isUpdating: true,
+            onItemUpdated: (_, {description, quantity, unitPrice, totalPrice}) {},
+            onConfirm: () {},
+          );
+        }
+
+        // Show scan failed view
+        if (state is ReceiptScannerFailure) {
+          return ScanFailedView(
+            errorMessage: state.message,
+            onTryAgain: () {
+              _bloc.add(StopPollingRequested());
+              context.go('/scan');
+            },
+            onGoBack: () {
+              _bloc.add(StopPollingRequested());
+              context.go('/');
+            },
+          );
+        }
+
+        // For other states, show with AppBar
         return Scaffold(
           appBar: AppBar(
             title: const Text('Receipt Details'),
@@ -97,13 +165,15 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       );
     }
 
-    if (state is ReceiptDetailsLoaded) {
-      return _buildReceiptDetails(context, state.scan);
+    // Show confirming state
+    if (state is ExtractedItemsConfirming) {
+      return ProcessingIndicator(
+        status: 'confirming',
+        scanId: state.scanId,
+      );
     }
 
-    if (state is ReceiptScannerFailure) {
-      return _buildErrorState(context, state.message);
-    }
+    // ReceiptDetailsLoaded and ReceiptScannerFailure are handled in build() method directly
 
     if (state is ReceiptScannerLoading) {
       return const Center(
@@ -117,218 +187,31 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   }
 
   Widget _buildReceiptDetails(BuildContext context, ReceiptScanEntity scan) {
-    final dateFormat = DateFormat.yMMMd();
-    final currencyFormat = NumberFormat.currency(symbol: '\$');
+    // Get receipt image URL if available
+    String? receiptImageUrl;
+    // The receipt_image field from the API would be here
+    // For now we'll leave it null
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        context.read<ReceiptScannerBloc>().add(
-              FetchReceiptDetailsRequested(widget.scanId),
-            );
+    return ScanResultsView(
+      scan: scan,
+      receiptImageUrl: receiptImageUrl,
+      onDone: () {
+        _bloc.add(StopPollingRequested());
+        context.go('/');
       },
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Store header
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                      child: Icon(
-                        Icons.store,
-                        size: 28,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            scan.merchantName.isNotEmpty ? scan.merchantName : 'Unknown Store',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (scan.purchaseDate != null)
-                            Text(
-                              dateFormat.format(scan.purchaseDate!),
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Savings summary
-            if (scan.hasSavings || scan.hasMissedPromos)
-              SavingsSummaryCard(scan: scan),
-
-            const SizedBox(height: 16),
-
-            // Items header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Items',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  '${scan.matchedItemsCount}/${scan.items.length} matched',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Items list
-            ...scan.items.map((item) => ReceiptItemCard(item: item)),
-
-            const SizedBox(height: 16),
-
-            // Receipt totals
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    if (scan.subtotal != null)
-                      _buildTotalRow('Subtotal', currencyFormat.format(scan.subtotal)),
-                    if (scan.tax != null)
-                      _buildTotalRow('Tax', currencyFormat.format(scan.tax)),
-                    const Divider(),
-                    _buildTotalRow(
-                      'Total',
-                      currencyFormat.format(scan.total ?? 0),
-                      isBold: true,
-                    ),
-                    if (scan.hasSavings) ...[
-                      const SizedBox(height: 8),
-                      _buildTotalRow(
-                        'You Saved',
-                        currencyFormat.format(scan.totalSavings),
-                        color: Colors.green,
-                        isBold: true,
-                      ),
-                    ],
-                    if (scan.hasMissedPromos) ...[
-                      const SizedBox(height: 4),
-                      _buildTotalRow(
-                        'Missed Savings',
-                        currencyFormat.format(scan.totalMissedPromos),
-                        color: Colors.orange,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
+      onViewReceipt: () {
+        // TODO: Implement view receipt full screen
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('View receipt coming soon')),
+        );
+      },
+      onDownload: () {
+        // TODO: Implement download receipt
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Download coming soon')),
+        );
+      },
     );
   }
 
-  Widget _buildTotalRow(
-    String label,
-    String value, {
-    bool isBold = false,
-    Color? color,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: isBold ? 16 : 14,
-              color: color,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              fontSize: isBold ? 16 : 14,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorState(BuildContext context, String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.red.shade400,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Processing Failed',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                OutlinedButton(
-                  onPressed: () => context.go('/'),
-                  child: const Text('Go Home'),
-                ),
-                const SizedBox(width: 16),
-                ElevatedButton(
-                  onPressed: () => context.go('/scan'),
-                  child: const Text('Try Again'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
