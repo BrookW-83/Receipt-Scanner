@@ -17,6 +17,7 @@ class ReceiptScanEntity extends Equatable {
   final num? totalMissedPromos;
   final int matchedItemsCount;
   final DateTime? createdAt;
+  final String? receiptImageUrl;
 
   const ReceiptScanEntity({
     required this.id,
@@ -32,6 +33,7 @@ class ReceiptScanEntity extends Equatable {
     this.totalMissedPromos,
     this.matchedItemsCount = 0,
     this.createdAt,
+    this.receiptImageUrl,
   });
 
   bool get isProcessing => status == 'pending' || status == 'processing' || status == 'matching';
@@ -56,5 +58,6 @@ class ReceiptScanEntity extends Equatable {
         totalMissedPromos,
         matchedItemsCount,
         createdAt,
+        receiptImageUrl,
       ];
 }

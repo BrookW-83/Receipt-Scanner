@@ -16,6 +16,7 @@ class ReceiptScanModel extends ReceiptScanEntity {
     super.totalMissedPromos,
     super.matchedItemsCount = 0,
     super.createdAt,
+    super.receiptImageUrl,
   });
 
   factory ReceiptScanModel.fromJson(Map<String, dynamic> json) {
@@ -51,6 +52,7 @@ class ReceiptScanModel extends ReceiptScanEntity {
       totalMissedPromos: parseNum(json['total_missed_promos']),
       matchedItemsCount: (json['matched_items_count'] as num?)?.toInt() ?? 0,
       createdAt: parseDate(json['created_at']),
+      receiptImageUrl: json['receipt_image']?.toString(),
     );
   }
 }

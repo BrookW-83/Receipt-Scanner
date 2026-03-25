@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:math' as math;
 import '../../domain/entities/receipt_scan_entity.dart';
 import '../../domain/entities/receipt_item_entity.dart';
@@ -28,17 +29,14 @@ class _ScanResultsViewState extends State<ScanResultsView> {
   bool _notifyAllItems = true;
   final Set<String> _notifyItems = {};
 
-  /// Primary green - rgba(72, 199, 116, 1)
   static const Color primaryGreen = Color(0xFF48C774);
-  /// Secondary green - rgba(171, 222, 188, 1)
   static const Color secondaryGreen = Color(0xFFABDEBC);
-  /// Default currency symbol for Mauritius Rupee
+  static const Color bgColor = Color(0xFFF0F7F3);
   static const String _currencySymbol = 'Rs';
 
   @override
   void initState() {
     super.initState();
-    // Initialize all matched items as notified
     for (final item in widget.scan.items) {
       if (item.isMatched) {
         _notifyItems.add(item.id);
@@ -48,182 +46,129 @@ class _ScanResultsViewState extends State<ScanResultsView> {
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd/MM/yyyy');
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F9F5),
-      body: Column(
-        children: [
-          // Green header section
-          Container(
-            decoration: BoxDecoration(
-              color: secondaryGreen.withOpacity(0.5),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
+      backgroundColor: bgColor,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top bar with back button and PikSou logo
+            _buildTopBar(context),
+
+            // Scrollable cards
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: Column(
+                  children: [
+                    // Card 1: Date & Merchant
+                    _buildDateMerchantCard(),
+                    const SizedBox(height: 12),
+
+                    // Card 2: Receipt preview & actions
+                    _buildReceiptActionsCard(),
+                    const SizedBox(height: 12),
+
+                    // Card 3: Savings & Items
+                    _buildSavingsAndItemsCard(),
+                    const SizedBox(height: 80),
+                  ],
+                ),
               ),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Column(
-                children: [
-                  // App bar
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: widget.onDone,
-                          color: primaryGreen,
-                        ),
-                        const Spacer(),
-                        Text(
-                          'PikSou',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: primaryGreen,
-                          ),
-                        ),
-                        const Spacer(),
-                        const SizedBox(width: 48), // Balance the back button
-                      ],
-                    ),
-                  ),
-
-                  // Date and Store row
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Date
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.calendar_today, size: 18, color: Colors.grey.shade600),
-                              const SizedBox(width: 8),
-                              Text(
-                                widget.scan.purchaseDate != null
-                                    ? dateFormat.format(widget.scan.purchaseDate!)
-                                    : 'Unknown',
-                                style: TextStyle(
-                                  color: Colors.grey.shade700,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Store
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade700,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Center(
-                                  child: Icon(Icons.store, color: Colors.white, size: 20),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                widget.scan.merchantName.isNotEmpty
-                                    ? widget.scan.merchantName
-                                    : 'Unknown Store',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Scrollable content
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Receipt preview card
-                  _buildReceiptPreviewCard(context),
-                  const SizedBox(height: 16),
-
-                  // Savings card
-                  _buildSavingsCard(context, primaryGreen),
-                  const SizedBox(height: 16),
-
-                  // Items section
-                  _buildItemsSection(context, primaryGreen),
-                  const SizedBox(height: 100),
-                  
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-
-      // Done button
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
             ),
           ],
         ),
-        child: SafeArea(
-          child: ElevatedButton(
+      ),
+
+      // Done button
+      bottomNavigationBar: _buildDoneButton(),
+    );
+  }
+
+  // ===========================================================================
+  // Top bar
+  // ===========================================================================
+
+  Widget _buildTopBar(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: primaryGreen),
             onPressed: widget.onDone,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryGreen,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              'Done',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const Spacer(),
+          Text(
+            'PikSou',
+            style: GoogleFonts.dancingScript(
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              color: primaryGreen,
             ),
           ),
-        ),
+          const Spacer(),
+          const SizedBox(width: 48),
+        ],
       ),
     );
   }
 
-  Widget _buildReceiptPreviewCard(BuildContext context) {
+  // ===========================================================================
+  // Card 1: Date & Merchant
+  // ===========================================================================
+
+  Widget _buildDateMerchantCard() {
+    final dateFormat = DateFormat('dd MMM yyyy');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          // Date
+          Row(
+            children: [
+              Icon(Icons.calendar_today_outlined, size: 16, color: Colors.grey.shade500),
+              const SizedBox(width: 8),
+              Text(
+                widget.scan.purchaseDate != null
+                    ? dateFormat.format(widget.scan.purchaseDate!)
+                    : 'Unknown date',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const Spacer(),
+          // Merchant name
+          Flexible(
+            child: Text(
+              widget.scan.merchantName.isNotEmpty
+                  ? widget.scan.merchantName
+                  : 'Unknown Store',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // Card 2: Receipt preview & actions
+  // ===========================================================================
+
+  Widget _buildReceiptActionsCard() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -232,43 +177,26 @@ class _ScanResultsViewState extends State<ScanResultsView> {
       ),
       child: Row(
         children: [
-          // Receipt thumbnail
+          // Small receipt thumbnail
           Container(
-            width: 60,
-            height: 80,
+            width: 48,
+            height: 64,
             decoration: BoxDecoration(
-              color: Colors.grey.shade200,
+              color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: Colors.grey.shade200),
             ),
-            child: widget.receiptImageUrl != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      widget.receiptImageUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.receipt_long,
-                        color: Colors.grey.shade400,
-                        size: 32,
-                      ),
-                    ),
-                  )
-                : Icon(
-                    Icons.receipt_long,
-                    color: Colors.grey.shade400,
-                    size: 32,
-                  ),
+            child: _buildReceiptThumbnail(),
           ),
           const Spacer(),
 
-          // View Receipt button
+          // View button
           _buildActionButton(
             icon: Icons.visibility_outlined,
-            label: 'View Receipt',
+            label: 'View',
             onTap: widget.onViewReceipt,
           ),
-          const SizedBox(width: 24),
+          const SizedBox(width: 32),
 
           // Download button
           _buildActionButton(
@@ -276,8 +204,30 @@ class _ScanResultsViewState extends State<ScanResultsView> {
             label: 'Download',
             onTap: widget.onDownload,
           ),
+          const SizedBox(width: 8),
         ],
       ),
+    );
+  }
+
+  Widget _buildReceiptThumbnail() {
+    final imageUrl = widget.scan.receiptImageUrl ?? widget.receiptImageUrl;
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(7),
+        child: Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _receiptPlaceholder(),
+        ),
+      );
+    }
+    return _receiptPlaceholder();
+  }
+
+  Widget _receiptPlaceholder() {
+    return Center(
+      child: Icon(Icons.receipt_long, color: Colors.grey.shade400, size: 24),
     );
   }
 
@@ -294,16 +244,16 @@ class _ScanResultsViewState extends State<ScanResultsView> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: primaryGreen.withOpacity(0.1),
+              color: primaryGreen.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: primaryGreen, size: 22),
+            child: Icon(icon, color: primaryGreen, size: 20),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: TextStyle(
-              fontSize: 12,
+            style: const TextStyle(
+              fontSize: 11,
               color: primaryGreen,
               fontWeight: FontWeight.w500,
             ),
@@ -313,14 +263,18 @@ class _ScanResultsViewState extends State<ScanResultsView> {
     );
   }
 
-  Widget _buildSavingsCard(BuildContext context, Color primaryGreen) {
-    final currencyFormat = NumberFormat.currency(symbol: _currencySymbol);
-    final totalPaid = widget.scan.total ?? 0;
-    final potentialSavings = widget.scan.totalMissedPromos ?? 0;
-    final withPikSou = (totalPaid as num) - (potentialSavings as num);
+  // ===========================================================================
+  // Card 3: Savings & Items
+  // ===========================================================================
 
-    // Calculate percentage for the ring
-    final savingsPercentage = totalPaid > 0 ? (potentialSavings / totalPaid) : 0.0;
+  Widget _buildSavingsAndItemsCard() {
+    final totalPaid = (widget.scan.total ?? 0).toDouble();
+    final savings = (widget.scan.totalSavings ?? 0).toDouble().abs();
+    final withPikSou = (totalPaid - savings).clamp(0.0, totalPaid);
+    final savingsPercent = totalPaid > 0 ? savings / totalPaid : 0.0;
+    final currencyFormat = NumberFormat.currency(symbol: '$_currencySymbol ');
+
+    final matchedItems = widget.scan.items.where((item) => item.isMatched).toList();
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -329,145 +283,161 @@ class _ScanResultsViewState extends State<ScanResultsView> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Title
-          Text(
-            'You Could Have Saved',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w500,
-              color: primaryGreen,
-              fontStyle: FontStyle.italic,
+          Center(
+            child: Text(
+              'You Could Have Saved',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: primaryGreen,
+              ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
 
-          // Savings amount and ring
+          // Pie chart + amounts
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              // Amount
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _currencySymbol,
-                    style: TextStyle(
-                      fontSize: 24,
-                      color: primaryGreen,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    potentialSavings.toStringAsFixed(2),
-                    style: const TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Ring chart
+              // Pie chart
               SizedBox(
-                width: 80,
-                height: 80,
+                width: 100,
+                height: 100,
                 child: CustomPaint(
-                  painter: _SavingsRingPainter(
-                    progress: savingsPercentage.clamp(0.0, 1.0),
-                    color: primaryGreen,
+                  painter: _SavingsPieChartPainter(
+                    savingsPercent: savingsPercent.clamp(0.0, 1.0),
+                    totalColor: secondaryGreen,
+                    savingsColor: primaryGreen,
                   ),
+                  child: Center(
+                    child: Text(
+                      '${(savingsPercent * 100).toStringAsFixed(0)}%',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: primaryGreen,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 24),
+
+              // Amounts
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Savings amount
+                    Text(
+                      currencyFormat.format(savings),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: primaryGreen,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'potential savings',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
 
-          // Comparison
+          // Pie chart legend
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'You Paid',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'With PikSou',
-                    style: TextStyle(
-                      color: primaryGreen,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    currencyFormat.format(totalPaid),
-                    style: TextStyle(
-                      color: Colors.grey.shade700,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    currencyFormat.format(withPikSou),
-                    style: TextStyle(
-                      color: primaryGreen,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 17,
-                    ),
-                  ),
-                ],
-              ),
+              _legendDot(secondaryGreen),
+              const SizedBox(width: 6),
+              Text('Total', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              const SizedBox(width: 20),
+              _legendDot(primaryGreen),
+              const SizedBox(width: 6),
+              Text('Saved', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
             ],
           ),
-        ],
-      ),
-    );
-  }
+          const SizedBox(height: 20),
 
-  Widget _buildItemsSection(BuildContext context, Color primaryGreen) {
-    final matchedItems = widget.scan.items.where((item) => item.isMatched).toList();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          const Text(
-            'Items',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          // You paid / With PikSou
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'You Paid',
+                      style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                    ),
+                    Text(
+                      currencyFormat.format(totalPaid),
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'With PikSou',
+                      style: GoogleFonts.dancingScript(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: primaryGreen,
+                      ),
+                    ),
+                    Text(
+                      currencyFormat.format(withPikSou),
+                      style: const TextStyle(
+                        fontSize: 17,
+                        color: primaryGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
+
+          const SizedBox(height: 24),
+          const Divider(),
           const SizedBox(height: 12),
+
+          // Items header
+          const Text(
+            'Items',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
 
           // Notify toggle
           Row(
             children: [
               Expanded(
                 child: Text(
-                  'Notify me next time these items are on discount',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade700,
-                  ),
+                  'Notify me when these items are on discount',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
                 ),
               ),
               Switch(
@@ -484,20 +454,21 @@ class _ScanResultsViewState extends State<ScanResultsView> {
                     }
                   });
                 },
-                activeColor: primaryGreen,
+                activeThumbColor: Colors.white,
+                activeTrackColor: primaryGreen,
               ),
             ],
           ),
-          const Divider(height: 24),
+          const SizedBox(height: 8),
 
-          // Items list
-          ...matchedItems.map((item) => _buildItemCard(item, primaryGreen)),
+          // Matched items
+          ...matchedItems.map((item) => _buildItemCard(item)),
 
-          // Non-matched items (if any)
+          // Unmatched items
           if (widget.scan.items.any((item) => !item.isMatched)) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
-              'Unmatched Items',
+              'Other Items',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey.shade600,
@@ -514,8 +485,16 @@ class _ScanResultsViewState extends State<ScanResultsView> {
     );
   }
 
-  Widget _buildItemCard(ReceiptItemEntity item, Color primaryGreen) {
-    final currencyFormat = NumberFormat.currency(symbol: _currencySymbol);
+  Widget _legendDot(Color color) {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+
+  Widget _buildItemCard(ReceiptItemEntity item) {
+    final currencyFormat = NumberFormat.currency(symbol: '$_currencySymbol ');
     final hasDiscount = item.hasMissedPromo || item.hasSavings;
     final originalPrice = item.unitPrice ?? item.totalPrice ?? 0;
     final discountPrice = item.promoPrice ?? item.databasePrice ?? originalPrice;
@@ -525,74 +504,35 @@ class _ScanResultsViewState extends State<ScanResultsView> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Product image placeholder
+          // Product icon
           Container(
-            width: 56,
-            height: 56,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: bgColor,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.shopping_basket,
-              color: Colors.grey.shade400,
-              size: 28,
-            ),
+            child: Icon(Icons.shopping_basket, color: Colors.grey.shade400, size: 24),
           ),
           const SizedBox(width: 12),
 
-          // Product details
+          // Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Original description
                 Text(
                   item.description,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                 ),
-                const SizedBox(height: 2),
-
-                // Matched product name
-                if (item.matchedProductName != null && item.matchedProductName!.isNotEmpty)
+                if (item.matchedProductName != null && item.matchedProductName!.isNotEmpty) ...[
+                  const SizedBox(height: 2),
                   Text(
                     item.matchedProductName!,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
+                ],
                 const SizedBox(height: 4),
-
-                // Store badge (placeholder - would need store data)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.storefront, size: 12, color: Colors.orange.shade700),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Best Deal',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.orange.shade700,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                // Prices
                 Row(
                   children: [
                     if (hasDiscount) ...[
@@ -610,7 +550,7 @@ class _ScanResultsViewState extends State<ScanResultsView> {
                       currencyFormat.format(hasDiscount ? discountPrice : originalPrice),
                       style: TextStyle(
                         fontSize: 15,
-                        color: hasDiscount ? primaryGreen : Colors.black,
+                        color: hasDiscount ? primaryGreen : Colors.black87,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -620,7 +560,7 @@ class _ScanResultsViewState extends State<ScanResultsView> {
             ),
           ),
 
-          // Notification toggle
+          // Toggle
           Switch(
             value: _notifyItems.contains(item.id),
             onChanged: (value) {
@@ -634,7 +574,8 @@ class _ScanResultsViewState extends State<ScanResultsView> {
                     widget.scan.items.where((i) => i.isMatched).length;
               });
             },
-            activeColor: primaryGreen,
+            activeThumbColor: Colors.white,
+            activeTrackColor: primaryGreen,
           ),
         ],
       ),
@@ -642,7 +583,7 @@ class _ScanResultsViewState extends State<ScanResultsView> {
   }
 
   Widget _buildUnmatchedItemCard(ReceiptItemEntity item) {
-    final currencyFormat = NumberFormat.currency(symbol: _currencySymbol);
+    final currencyFormat = NumberFormat.currency(symbol: '$_currencySymbol ');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -651,66 +592,102 @@ class _ScanResultsViewState extends State<ScanResultsView> {
           Expanded(
             child: Text(
               item.description,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade700,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
             ),
           ),
           Text(
             currencyFormat.format(item.totalPrice ?? item.unitPrice ?? 0),
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           ),
         ],
       ),
     );
   }
+
+  // ===========================================================================
+  // Done button
+  // ===========================================================================
+
+  Widget _buildDoneButton() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: ElevatedButton(
+          onPressed: widget.onDone,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: primaryGreen,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 0,
+          ),
+          child: const Text(
+            'Done',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-// Custom painter for the savings ring
-class _SavingsRingPainter extends CustomPainter {
-  final double progress;
-  final Color color;
+// =============================================================================
+// Pie chart painter
+// =============================================================================
 
-  _SavingsRingPainter({required this.progress, required this.color});
+class _SavingsPieChartPainter extends CustomPainter {
+  final double savingsPercent;
+  final Color totalColor;
+  final Color savingsColor;
+
+  _SavingsPieChartPainter({
+    required this.savingsPercent,
+    required this.totalColor,
+    required this.savingsColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 6;
-    const strokeWidth = 10.0;
+    final radius = math.min(size.width, size.height) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Background ring
-    final bgPaint = Paint()
-      ..color = Colors.grey.shade200
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
+    // Total (light green) - full circle background
+    final totalPaint = Paint()
+      ..color = totalColor
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius, totalPaint);
 
-    canvas.drawCircle(center, radius, bgPaint);
+    // Savings (primary green) - arc from top
+    if (savingsPercent > 0) {
+      final savingsPaint = Paint()
+        ..color = savingsColor
+        ..style = PaintingStyle.fill;
+      final sweepAngle = 2 * math.pi * savingsPercent;
+      canvas.drawArc(rect, -math.pi / 2, sweepAngle, true, savingsPaint);
+    }
 
-    // Progress ring
-    final progressPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-
-    final sweepAngle = 2 * math.pi * progress;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2, // Start from top
-      sweepAngle,
-      false,
-      progressPaint,
-    );
+    // White center hole for donut effect
+    final holePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, radius * 0.6, holePaint);
   }
 
   @override
-  bool shouldRepaint(covariant _SavingsRingPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color;
+  bool shouldRepaint(covariant _SavingsPieChartPainter oldDelegate) {
+    return oldDelegate.savingsPercent != savingsPercent;
   }
 }
