@@ -128,9 +128,10 @@ class _ReceiptScannerAppState extends State<ReceiptScannerApp> {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.green,
+            seedColor: const Color(0xFF48C774),
             brightness: Brightness.light,
           ),
+          scaffoldBackgroundColor: Colors.white,
           useMaterial3: true,
           appBarTheme: const AppBarTheme(
             centerTitle: true,

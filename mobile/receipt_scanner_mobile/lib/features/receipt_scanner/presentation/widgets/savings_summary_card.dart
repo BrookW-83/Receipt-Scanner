@@ -20,7 +20,7 @@ class SavingsSummaryCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.green.shade50,
+                color: const Color(0xFF48C774).withValues(alpha: 0.1),
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                   topRight: Radius.circular(12),
@@ -31,12 +31,12 @@ class SavingsSummaryCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade100,
+                      color: const Color(0xFF48C774).withValues(alpha: 0.2),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
                       Icons.savings,
-                      color: Colors.green.shade700,
+                      color: const Color(0xFF48C774),
                       size: 28,
                     ),
                   ),
@@ -57,7 +57,7 @@ class SavingsSummaryCard extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Colors.green.shade700,
+                            color: const Color(0xFF48C774),
                           ),
                         ),
                       ],
@@ -145,7 +145,7 @@ class SavingsSummaryCard extends StatelessWidget {
                   icon: Icons.check_circle_outline,
                   value: '${scan.matchedItemsCount}',
                   label: 'Matched',
-                  color: Colors.green,
+                  color: const Color(0xFF48C774),
                 ),
                 _buildStatItem(
                   icon: Icons.trending_up,

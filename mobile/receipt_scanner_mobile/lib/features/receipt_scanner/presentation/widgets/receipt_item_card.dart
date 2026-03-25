@@ -28,7 +28,7 @@ class ReceiptItemCard extends StatelessWidget {
                     margin: const EdgeInsets.only(right: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
+                      color: const Color(0xFF48C774).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -36,7 +36,7 @@ class ReceiptItemCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        color: const Color(0xFF48C774),
                       ),
                     ),
                   ),
@@ -109,23 +109,23 @@ class ReceiptItemCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.green.shade50,
+                    color: const Color(0xFF48C774).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.shade200),
+                    border: Border.all(color: const Color(0xFF48C774).withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.savings,
                         size: 16,
-                        color: Colors.green.shade700,
+                        color: const Color(0xFF48C774),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'You saved ${currencyFormat.format(item.totalSaving)}',
                           style: TextStyle(
-                            color: Colors.green.shade700,
+                            color: const Color(0xFF48C774),
                             fontWeight: FontWeight.w500,
                             fontSize: 13,
                           ),
@@ -135,7 +135,7 @@ class ReceiptItemCard extends StatelessWidget {
                         Text(
                           'vs ${currencyFormat.format(item.databasePrice)}',
                           style: TextStyle(
-                            color: Colors.green.shade600,
+                            color: const Color(0xFF48C774),
                             fontSize: 12,
                           ),
                         ),
@@ -207,7 +207,7 @@ class ReceiptItemCard extends StatelessWidget {
   Color _getConfidenceColor(String confidence) {
     switch (confidence) {
       case 'high':
-        return Colors.green;
+        return const Color(0xFF48C774);
       case 'medium':
         return Colors.blue;
       case 'low':

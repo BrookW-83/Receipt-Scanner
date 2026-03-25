@@ -13,6 +13,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const Color primaryGreen = Color(0xFF48C774);
+  static const String _currencySymbol = 'Rs';
+
   @override
   void initState() {
     super.initState();
@@ -22,11 +25,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Receipt Scanner'),
+        backgroundColor: Colors.white,
+        title: const Text(
+          'Receipt Scanner',
+          style: TextStyle(color: primaryGreen, fontWeight: FontWeight.w600),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: primaryGreen),
             onPressed: () {
               context.read<ReceiptScannerBloc>().add(LoadRecentScansRequested());
             },
@@ -36,12 +44,13 @@ class _HomeScreenState extends State<HomeScreen> {
       body: BlocBuilder<ReceiptScannerBloc, ReceiptScannerState>(
         builder: (context, state) {
           return RefreshIndicator(
+            color: primaryGreen,
             onRefresh: () async {
               context.read<ReceiptScannerBloc>().add(LoadRecentScansRequested());
             },
             child: CustomScrollView(
               slivers: [
-                // Hero section with scan button
+                // Hero section
                 SliverToBoxAdapter(
                   child: _buildHeroSection(context),
                 ),
@@ -63,13 +72,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Recent scans list
                 if (state is ReceiptScannerLoading)
                   const SliverFillRemaining(
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(child: CircularProgressIndicator(color: primaryGreen)),
                   )
                 else if (state is RecentScansLoaded)
                   state.scans.isEmpty
-                      ? SliverFillRemaining(
-                          child: _buildEmptyState(),
-                        )
+                      ? SliverFillRemaining(child: _buildEmptyState())
                       : SliverList(
                           delegate: SliverChildBuilderDelegate(
                             (context, index) => _buildScanTile(context, state.scans[index]),
@@ -81,9 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: _buildErrorState(context, state.message),
                   )
                 else
-                  SliverFillRemaining(
-                    child: _buildEmptyState(),
-                  ),
+                  SliverFillRemaining(child: _buildEmptyState()),
               ],
             ),
           );
@@ -91,6 +96,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/scan'),
+        backgroundColor: primaryGreen,
+        foregroundColor: Colors.white,
         icon: const Icon(Icons.camera_alt),
         label: const Text('Scan Receipt'),
       ),
@@ -102,31 +109,20 @@ class _HomeScreenState extends State<HomeScreen> {
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.secondary,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: primaryGreen,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.receipt_long,
-            size: 48,
-            color: Theme.of(context).colorScheme.onPrimary,
-          ),
+          const Icon(Icons.receipt_long, size: 48, color: Colors.white),
           const SizedBox(height: 16),
-          Text(
+          const Text(
             'Track Your Savings',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onPrimary,
+              color: Colors.white,
             ),
           ),
           const SizedBox(height: 8),
@@ -134,7 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
             'Scan your receipts to see how much you saved and find missed deals.',
             style: TextStyle(
               fontSize: 14,
-              color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.9),
+              color: Colors.white.withValues(alpha: 0.9),
             ),
           ),
           const SizedBox(height: 16),
@@ -143,8 +139,8 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.camera_alt),
             label: const Text('Scan Now'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.onPrimary,
-              foregroundColor: Theme.of(context).colorScheme.primary,
+              backgroundColor: Colors.white,
+              foregroundColor: primaryGreen,
             ),
           ),
         ],
@@ -154,14 +150,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildScanTile(BuildContext context, ReceiptScanEntity scan) {
     final dateFormat = DateFormat.yMMMd();
-    final currencyFormat = NumberFormat.currency(symbol: '\$');
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade200),
+      ),
       child: ListTile(
         onTap: () => context.push('/scan/${scan.id}'),
         leading: CircleAvatar(
-          backgroundColor: _getStatusColor(scan.status).withOpacity(0.2),
+          backgroundColor: _getStatusColor(scan.status).withValues(alpha: 0.15),
           child: Icon(
             _getStatusIcon(scan.status),
             color: _getStatusColor(scan.status),
@@ -179,9 +180,9 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(dateFormat.format(scan.createdAt!)),
             if (scan.hasSavings)
               Text(
-                'Saved ${currencyFormat.format(scan.totalSavings)}',
-                style: TextStyle(
-                  color: Colors.green.shade700,
+                'Saved $_currencySymbol ${scan.totalSavings!.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: primaryGreen,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -193,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             if (scan.total != null)
               Text(
-                currencyFormat.format(scan.total),
+                '$_currencySymbol ${scan.total!.toStringAsFixed(2)}',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -210,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: _getStatusColor(status).withOpacity(0.2),
+        color: _getStatusColor(status).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -227,9 +228,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'completed':
-        return Colors.green;
+        return primaryGreen;
       case 'processing':
       case 'pending':
+      case 'awaiting_review':
+      case 'matching':
         return Colors.orange;
       case 'failed':
         return Colors.red;
@@ -244,7 +247,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.check_circle;
       case 'processing':
       case 'pending':
+      case 'matching':
         return Icons.hourglass_top;
+      case 'awaiting_review':
+        return Icons.rate_review;
       case 'failed':
         return Icons.error;
       default:
@@ -257,25 +263,16 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.receipt_long,
-            size: 64,
-            color: Colors.grey.shade400,
-          ),
+          Icon(Icons.receipt_long, size: 64, color: Colors.grey.shade400),
           const SizedBox(height: 16),
           Text(
             'No receipts yet',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey.shade600,
-            ),
+            style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 8),
           Text(
             'Tap the button below to scan your first receipt',
-            style: TextStyle(
-              color: Colors.grey.shade500,
-            ),
+            style: TextStyle(color: Colors.grey.shade500),
           ),
         ],
       ),
@@ -287,32 +284,27 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 64,
-            color: Colors.red.shade400,
-          ),
+          Icon(Icons.error_outline, size: 64, color: Colors.red.shade400),
           const SizedBox(height: 16),
           Text(
             'Failed to load scans',
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey.shade600,
-            ),
+            style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 8),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey.shade500,
-            ),
+            style: TextStyle(color: Colors.grey.shade500),
           ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () {
               context.read<ReceiptScannerBloc>().add(LoadRecentScansRequested());
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryGreen,
+              foregroundColor: Colors.white,
+            ),
             child: const Text('Retry'),
           ),
         ],
