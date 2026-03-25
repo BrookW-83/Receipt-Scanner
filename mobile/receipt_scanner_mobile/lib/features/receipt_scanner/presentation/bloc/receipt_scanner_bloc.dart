@@ -284,6 +284,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
   final ReceiptScannerRepository repository;
 
   Timer? _pollingTimer;
+  bool _postConfirm = false; // Skip awaiting_review check after confirm
   static const _pollingInterval = Duration(seconds: 2);
   static const _maxPollingAttempts = 60; // 2 minutes max
   static const _maxConsecutiveErrors = 5;
@@ -379,12 +380,15 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
 
       if (scan.isCompleted) {
         _pollingTimer?.cancel();
+        _postConfirm = false;
         emit(ReceiptDetailsLoaded(scan));
       } else if (scan.isFailed) {
         _pollingTimer?.cancel();
+        _postConfirm = false;
         emit(const ReceiptScannerFailure('Receipt processing failed. Please try again.'));
-      } else if (scan.isAwaitingReview) {
+      } else if (scan.isAwaitingReview && !_postConfirm) {
         // Stop polling and fetch extracted items for review
+        // Skip this if we just confirmed (race condition: status not yet updated)
         _pollingTimer?.cancel();
         add(FetchExtractedItemsRequested(event.scanId));
       } else {
@@ -444,6 +448,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
     Emitter<ReceiptScannerState> emit,
   ) {
     _pollingTimer?.cancel();
+    _postConfirm = false;
     emit(ReceiptScannerInitial());
   }
 
@@ -515,7 +520,8 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
 
     try {
       await repository.confirmExtractedItems(event.scanId);
-      // Resume polling for matching/completion
+      // Resume polling for matching/completion, skip awaiting_review check
+      _postConfirm = true;
       add(PollReceiptStatusRequested(event.scanId));
     } catch (e) {
       emit(ReceiptScannerFailure('Failed to confirm items: $e'));
