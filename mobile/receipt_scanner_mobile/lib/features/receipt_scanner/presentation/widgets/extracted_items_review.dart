@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../domain/entities/receipt_item_entity.dart';
 
 class ExtractedItemsReview extends StatefulWidget {
+  final ScrollController? scrollController;
   final String merchantName;
   final DateTime? purchaseDate;
   final num? subtotal;
@@ -12,12 +13,12 @@ class ExtractedItemsReview extends StatefulWidget {
   final String currency;
   final List<ReceiptItemEntity> items;
   final bool isUpdating;
-  final String? receiptImageUrl;
   final void Function(String itemId, {String? description, num? quantity, num? unitPrice, num? totalPrice}) onItemUpdated;
-  final VoidCallback onConfirm;
+  final VoidCallback onAnalyse;
 
   const ExtractedItemsReview({
     super.key,
+    this.scrollController,
     required this.merchantName,
     this.purchaseDate,
     this.subtotal,
@@ -26,9 +27,8 @@ class ExtractedItemsReview extends StatefulWidget {
     required this.currency,
     required this.items,
     required this.isUpdating,
-    this.receiptImageUrl,
     required this.onItemUpdated,
-    required this.onConfirm,
+    required this.onAnalyse,
   });
 
   @override
@@ -40,10 +40,7 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
   final List<_EditableItem> _editableItems = [];
   late TextEditingController _dateController;
 
-  /// Primary green - rgba(72, 199, 116, 1)
   static const Color primaryGreen = Color(0xFF48C774);
-  /// Secondary green - rgba(171, 222, 188, 1)
-  static const Color secondaryGreen = Color(0xFFABDEBC);
 
   @override
   void initState() {
@@ -97,7 +94,6 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
   }
 
   void _saveChanges() {
-    // Save each modified item
     for (int i = 0; i < _editableItems.length; i++) {
       final editableItem = _editableItems[i];
       if (i < widget.items.length) {
@@ -120,152 +116,53 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: primaryGreen),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'Scan receipt',
-          style: TextStyle(
-            color: primaryGreen,
-            fontWeight: FontWeight.w500,
-            fontSize: 18,
+    return Column(
+      children: [
+        // Drag handle
+        const SizedBox(height: 12),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline, color: primaryGreen),
-            onPressed: () {},
-          ),
-          if (_isEditMode)
-            IconButton(
-              icon: const Icon(Icons.flash_on, color: primaryGreen),
-              onPressed: () {},
-            ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Receipt image preview
-          _buildReceiptPreview(),
+        const SizedBox(height: 16),
 
-          // Content
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 16),
-
-                    // Store info
-                    _buildStoreInfo(),
-                    const SizedBox(height: 24),
-
-                    // Date row
-                    _buildDateRow(),
-                    const SizedBox(height: 24),
-
-                    // Items section
-                    _buildItemsSection(),
-
-                    if (!_isEditMode) ...[
-                      const Divider(height: 32),
-                      // Total row
-                      _buildTotalRow(),
-                    ],
-
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Bottom buttons
-          _buildBottomButtons(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReceiptPreview() {
-    if (_isEditMode) {
-      // Collapsed preview in edit mode
-      return Container(
-        height: 60,
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Center(
-          child: Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade400,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Full preview in view mode
-    return Container(
-      height: 280,
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(16),
-        image: widget.receiptImageUrl != null
-            ? DecorationImage(
-                image: NetworkImage(widget.receiptImageUrl!),
-                fit: BoxFit.cover,
-              )
-            : null,
-      ),
-      child: widget.receiptImageUrl == null
-          ? Stack(
+        // Scrollable content
+        Expanded(
+          child: SingleChildScrollView(
+            controller: widget.scrollController,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Placeholder receipt look
-                Positioned.fill(
-                  child: Container(
-                    margin: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.receipt_long, size: 48, color: Colors.grey.shade400),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Receipt Preview',
-                          style: TextStyle(color: Colors.grey.shade500),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                // Store info
+                _buildStoreInfo(),
+                const SizedBox(height: 24),
+
+                // Date row
+                _buildDateRow(),
+                const SizedBox(height: 24),
+
+                // Items section
+                _buildItemsSection(),
+
+                if (!_isEditMode) ...[
+                  const Divider(height: 32),
+                  _buildTotalRow(),
+                ],
+
+                const SizedBox(height: 24),
               ],
-            )
-          : null,
+            ),
+          ),
+        ),
+
+        // Bottom buttons
+        _buildBottomButtons(),
+      ],
     );
   }
 
@@ -273,7 +170,6 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
     return Center(
       child: Column(
         children: [
-          // Store logo placeholder
           Container(
             width: 80,
             height: 36,
@@ -313,10 +209,7 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
         children: [
           const Text(
             'Date',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
           ),
           const Spacer(),
           Container(
@@ -341,19 +234,13 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
       children: [
         const Text(
           'Date',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
         Text(
           widget.purchaseDate != null
               ? dateFormat.format(widget.purchaseDate!)
               : 'Unknown',
-          style: TextStyle(
-            fontSize: 15,
-            color: Colors.grey.shade700,
-          ),
+          style: TextStyle(fontSize: 15, color: Colors.grey.shade700),
         ),
       ],
     );
@@ -365,10 +252,7 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
       children: [
         const Text(
           'Items',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 16),
 
@@ -398,7 +282,6 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
     );
   }
 
-  /// Default currency symbol for Mauritius Rupee
   static const String _currencySymbol = 'Rs';
 
   List<Widget> _buildViewItems() {
@@ -418,10 +301,7 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
             const SizedBox(width: 16),
             Text(
               '$_currencySymbol ${price.toStringAsFixed(2)}',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -444,7 +324,6 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Description field
             Expanded(
               flex: 3,
               child: Column(
@@ -452,10 +331,7 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
                 children: [
                   Text(
                     'Item ${index + 1}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                   ),
                   const SizedBox(height: 4),
                   TextField(
@@ -472,8 +348,6 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
               ),
             ),
             const SizedBox(width: 16),
-
-            // Price field
             SizedBox(
               width: 80,
               child: Column(
@@ -481,10 +355,7 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
                 children: [
                   Text(
                     _currencySymbol,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                   ),
                   const SizedBox(height: 4),
                   TextField(
@@ -494,10 +365,7 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
                       contentPadding: EdgeInsets.zero,
                       border: InputBorder.none,
                     ),
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
@@ -520,17 +388,11 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
       children: [
         const Text(
           'Total',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         Text(
           '$_currencySymbol ${total.toStringAsFixed(2)}',
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ],
     );
@@ -541,8 +403,7 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
       padding: const EdgeInsets.all(24),
       child: SafeArea(
         child: _isEditMode
-            ? // Done button in edit mode
-            ElevatedButton(
+            ? ElevatedButton(
                 onPressed: widget.isUpdating ? null : _saveChanges,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryGreen,
@@ -564,17 +425,12 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
                       )
                     : const Text(
                         'Done',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
               )
-            : // Edit and Analyze buttons in view mode
-            Column(
+            : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Edit button
                   OutlinedButton(
                     onPressed: () => setState(() => _isEditMode = true),
                     style: OutlinedButton.styleFrom(
@@ -587,17 +443,12 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
                     ),
                     child: const Text(
                       'Edit',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // Analyze button
                   ElevatedButton(
-                    onPressed: widget.isUpdating ? null : widget.onConfirm,
+                    onPressed: widget.isUpdating ? null : widget.onAnalyse,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryGreen,
                       foregroundColor: Colors.white,
@@ -617,11 +468,8 @@ class _ExtractedItemsReviewState extends State<ExtractedItemsReview> {
                             ),
                           )
                         : const Text(
-                            'Analyze',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            'Analyse',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                           ),
                   ),
                 ],

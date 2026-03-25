@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -10,31 +11,33 @@ import '../widgets/scan_failed_view.dart';
 
 class ScanResultScreen extends StatefulWidget {
   final String scanId;
+  final String? localImagePath;
 
-  const ScanResultScreen({super.key, required this.scanId});
+  const ScanResultScreen({super.key, required this.scanId, this.localImagePath});
 
   @override
   State<ScanResultScreen> createState() => _ScanResultScreenState();
 }
 
 class _ScanResultScreenState extends State<ScanResultScreen> {
-  // Animation: when completed, cycle through remaining steps before showing results
+  // Completion animation state
   bool _animatingCompletion = false;
   String _animatedStatus = 'pending';
   ReceiptScanEntity? _completedScan;
   late final ReceiptScannerBloc _bloc;
 
+  // Track whether we've moved past the extraction+review phase
+  bool _analysisStarted = false;
+
   @override
   void initState() {
     super.initState();
     _bloc = context.read<ReceiptScannerBloc>();
-    // Start polling for status updates
     _bloc.add(PollReceiptStatusRequested(widget.scanId));
   }
 
   @override
   void dispose() {
-    // Stop polling when leaving the screen (safe — uses cached reference)
     _bloc.add(StopPollingRequested());
     super.dispose();
   }
@@ -55,68 +58,43 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     });
   }
 
+  /// Whether we should show the bottom sheet overlay (extraction + review phase)
+  bool _isSheetPhase(ReceiptScannerState state) {
+    if (_analysisStarted) return false;
+    return state is ReceiptScannerLoading ||
+        state is ReceiptProcessing ||
+        state is ExtractedItemsLoaded ||
+        state is ExtractedItemsUpdating;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<ReceiptScannerBloc, ReceiptScannerState>(
       listener: (context, state) {
+        if (state is ExtractedItemsConfirming) {
+          setState(() => _analysisStarted = true);
+        }
         if (state is ReceiptDetailsLoaded && !_animatingCompletion && _completedScan == null) {
           _startCompletionAnimation(state.scan);
         }
       },
       builder: (context, state) {
-        // Show results view without AppBar (it has its own header)
+        // === PHASE 3: Show completed results ===
         if (state is ReceiptDetailsLoaded && !_animatingCompletion) {
           return _buildReceiptDetails(context, state.scan);
         }
 
-        // Show extracted items review (has its own Scaffold)
-        if (state is ExtractedItemsLoaded) {
-          return ExtractedItemsReview(
-            merchantName: state.merchantName,
-            purchaseDate: state.purchaseDate,
-            subtotal: state.subtotal,
-            tax: state.tax,
-            total: state.total,
-            currency: state.currency,
-            items: state.items,
-            isUpdating: false,
-            onItemUpdated: (itemId, {description, quantity, unitPrice, totalPrice}) {
-              context.read<ReceiptScannerBloc>().add(
-                    UpdateExtractedItemRequested(
-                      scanId: state.scanId,
-                      itemId: itemId,
-                      description: description,
-                      quantity: quantity,
-                      unitPrice: unitPrice,
-                      totalPrice: totalPrice,
-                    ),
-                  );
-            },
-            onConfirm: () {
-              context.read<ReceiptScannerBloc>().add(
-                    ConfirmExtractedItemsRequested(state.scanId),
-                  );
-            },
-          );
+        // === PHASE 2: After "Analyse" — show 4-step progress ===
+        if (_analysisStarted) {
+          return _buildAnalysisPhase(context, state);
         }
 
-        // Show extracted items with updating indicator (has its own Scaffold)
-        if (state is ExtractedItemsUpdating) {
-          return ExtractedItemsReview(
-            merchantName: state.previousState.merchantName,
-            purchaseDate: state.previousState.purchaseDate,
-            subtotal: state.previousState.subtotal,
-            tax: state.previousState.tax,
-            total: state.previousState.total,
-            currency: state.previousState.currency,
-            items: state.previousState.items,
-            isUpdating: true,
-            onItemUpdated: (_, {description, quantity, unitPrice, totalPrice}) {},
-            onConfirm: () {},
-          );
+        // === PHASE 1: Extraction + Review with bottom sheet over receipt image ===
+        if (_isSheetPhase(state)) {
+          return _buildSheetPhase(context, state);
         }
 
-        // Show scan failed view
+        // === Failure state ===
         if (state is ReceiptScannerFailure) {
           return ScanFailedView(
             errorMessage: state.message,
@@ -131,87 +109,299 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           );
         }
 
-        // For other states, show with AppBar
+        // Fallback loading
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Receipt Details'),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                _bloc.add(StopPollingRequested());
-                context.go('/');
-              },
-            ),
+          backgroundColor: Colors.black,
+          body: _buildReceiptImageBackground(
+            child: const Center(child: CircularProgressIndicator(color: Colors.white)),
           ),
-          body: _buildBody(context, state),
         );
       },
     );
   }
 
-  Widget _buildBody(BuildContext context, ReceiptScannerState state) {
-    if (state is ReceiptProcessing) {
-      return ProcessingIndicator(
-        status: state.status,
-        scanId: state.scanId,
-      );
-    }
+  // =========================================================================
+  // PHASE 1: Bottom sheet over receipt image
+  // =========================================================================
 
-    // Show animation steps before revealing results
-    if (_animatingCompletion) {
-      return ProcessingIndicator(
-        status: _animatedStatus,
-        scanId: widget.scanId,
-      );
-    }
+  Widget _buildSheetPhase(BuildContext context, ReceiptScannerState state) {
+    final bool isExtracting = state is ReceiptScannerLoading ||
+        state is ReceiptProcessing;
+    final isUpdating = state is ExtractedItemsUpdating;
 
-    // Show confirming state
-    if (state is ExtractedItemsConfirming) {
-      return ProcessingIndicator(
-        status: 'confirming',
-        scanId: state.scanId,
-      );
-    }
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // Background: receipt image
+          _buildReceiptImageBackground(
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.black38,
+                      shape: const CircleBorder(),
+                    ),
+                    onPressed: () {
+                      _bloc.add(StopPollingRequested());
+                      context.go('/');
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
 
-    // ReceiptDetailsLoaded and ReceiptScannerFailure are handled in build() method directly
-
-    if (state is ReceiptScannerLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
-    }
-
-    return const Center(
-      child: CircularProgressIndicator(),
+          // Bottom sheet
+          DraggableScrollableSheet(
+            initialChildSize: isExtracting ? 0.25 : 0.80,
+            minChildSize: 0.20,
+            maxChildSize: 0.90,
+            snap: true,
+            snapSizes: const [0.25, 0.80],
+            builder: (context, scrollController) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 20,
+                      offset: Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: isExtracting
+                    ? _buildExtractingSheet(scrollController)
+                    : _buildExtractedItemsSheet(
+                        context,
+                        scrollController,
+                        state is ExtractedItemsLoaded ? state : null,
+                        isUpdating ? state as ExtractedItemsUpdating : null,
+                      ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildReceiptDetails(BuildContext context, ReceiptScanEntity scan) {
-    // Get receipt image URL if available
-    String? receiptImageUrl;
-    // The receipt_image field from the API would be here
-    // For now we'll leave it null
+  Widget _buildReceiptImageBackground({Widget? child}) {
+    return SizedBox.expand(
+      child: widget.localImagePath != null
+          ? Image.file(
+              File(widget.localImagePath!),
+              fit: BoxFit.cover,
+              color: Colors.black.withValues(alpha: 0.3),
+              colorBlendMode: BlendMode.darken,
+            )
+          : Container(
+              color: Colors.grey.shade900,
+              child: child,
+            ),
+    );
+  }
 
+  Widget _buildExtractingSheet(ScrollController scrollController) {
+    return SingleChildScrollView(
+      controller: scrollController,
+      physics: const ClampingScrollPhysics(),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          // Drag handle
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 32),
+          // Receipt icon with pulse animation
+          _ExtractingIndicator(),
+          const SizedBox(height: 20),
+          const Text(
+            'Extracting items...',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF333333),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'AI is reading your receipt',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExtractedItemsSheet(
+    BuildContext context,
+    ScrollController scrollController,
+    ExtractedItemsLoaded? loadedState,
+    ExtractedItemsUpdating? updatingState,
+  ) {
+    final itemsState = loadedState ?? updatingState?.previousState;
+    if (itemsState == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return ExtractedItemsReview(
+      scrollController: scrollController,
+      merchantName: itemsState.merchantName,
+      purchaseDate: itemsState.purchaseDate,
+      subtotal: itemsState.subtotal,
+      tax: itemsState.tax,
+      total: itemsState.total,
+      currency: itemsState.currency,
+      items: itemsState.items,
+      isUpdating: updatingState != null,
+      onItemUpdated: (itemId, {description, quantity, unitPrice, totalPrice}) {
+        context.read<ReceiptScannerBloc>().add(
+              UpdateExtractedItemRequested(
+                scanId: itemsState.scanId,
+                itemId: itemId,
+                description: description,
+                quantity: quantity,
+                unitPrice: unitPrice,
+                totalPrice: totalPrice,
+              ),
+            );
+      },
+      onAnalyse: () {
+        context.read<ReceiptScannerBloc>().add(
+              ConfirmExtractedItemsRequested(itemsState.scanId),
+            );
+      },
+    );
+  }
+
+  // =========================================================================
+  // PHASE 2: Analysis (4-step progress)
+  // =========================================================================
+
+  Widget _buildAnalysisPhase(BuildContext context, ReceiptScannerState state) {
+    String status = 'confirming';
+
+    if (state is ReceiptProcessing) {
+      status = state.status;
+    } else if (state is ExtractedItemsConfirming) {
+      status = 'confirming';
+    } else if (_animatingCompletion) {
+      status = _animatedStatus;
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Analysing Receipt'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            _bloc.add(StopPollingRequested());
+            context.go('/');
+          },
+        ),
+      ),
+      body: ProcessingIndicator(
+        status: status,
+        scanId: widget.scanId,
+      ),
+    );
+  }
+
+  // =========================================================================
+  // PHASE 3: Results
+  // =========================================================================
+
+  Widget _buildReceiptDetails(BuildContext context, ReceiptScanEntity scan) {
     return ScanResultsView(
       scan: scan,
-      receiptImageUrl: receiptImageUrl,
       onDone: () {
         _bloc.add(StopPollingRequested());
         context.go('/');
       },
       onViewReceipt: () {
-        // TODO: Implement view receipt full screen
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('View receipt coming soon')),
         );
       },
       onDownload: () {
-        // TODO: Implement download receipt
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Download coming soon')),
         );
       },
     );
   }
+}
 
+// =============================================================================
+// Extracting indicator with pulse animation
+// =============================================================================
+
+class _ExtractingIndicator extends StatefulWidget {
+  @override
+  State<_ExtractingIndicator> createState() => _ExtractingIndicatorState();
+}
+
+class _ExtractingIndicatorState extends State<_ExtractingIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    )..repeat(reverse: true);
+    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scaleAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Color(0xFFABDEBC),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.receipt_long,
+              size: 40,
+              color: Color(0xFF48C774),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }

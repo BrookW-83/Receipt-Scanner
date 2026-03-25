@@ -24,7 +24,8 @@ final appRouter = GoRouter(
       name: 'scan-result',
       builder: (context, state) {
         final scanId = state.pathParameters['id']!;
-        return ScanResultScreen(scanId: scanId);
+        final imagePath = state.extra as String?;
+        return ScanResultScreen(scanId: scanId, localImagePath: imagePath);
       },
     ),
   ],

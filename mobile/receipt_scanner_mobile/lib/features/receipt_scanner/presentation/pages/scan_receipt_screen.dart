@@ -5,16 +5,25 @@ import 'package:go_router/go_router.dart';
 import '../bloc/receipt_scanner_bloc.dart';
 import '../../domain/usecases/capture_image_usecase.dart';
 
-class ScanReceiptScreen extends StatelessWidget {
+class ScanReceiptScreen extends StatefulWidget {
   const ScanReceiptScreen({super.key});
+
+  @override
+  State<ScanReceiptScreen> createState() => _ScanReceiptScreenState();
+}
+
+class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
+  String? _capturedImagePath;
 
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<ReceiptScannerBloc, ReceiptScannerState>(
       listener: (context, state) {
-        if (state is ReceiptUploaded) {
-          // Navigate to result screen and start polling
-          context.go('/scan/${state.scan.id}');
+        if (state is ImageCaptured) {
+          _capturedImagePath = state.image.path;
+        } else if (state is ReceiptUploaded) {
+          // Navigate to result screen, pass local image path
+          context.go('/scan/${state.scan.id}', extra: _capturedImagePath);
         } else if (state is ReceiptScannerFailure) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -72,7 +81,7 @@ class ScanReceiptScreen extends StatelessWidget {
           Icon(
             Icons.receipt_long,
             size: 80,
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+            color: const Color(0xFF48C774).withValues(alpha: 0.5),
           ),
           const SizedBox(height: 24),
           Text(
@@ -136,7 +145,7 @@ class ScanReceiptScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 32),
         decoration: BoxDecoration(
           border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+            color: Colors.grey.shade300,
           ),
           borderRadius: BorderRadius.circular(16),
         ),
@@ -145,7 +154,7 @@ class ScanReceiptScreen extends StatelessWidget {
             Icon(
               icon,
               size: 48,
-              color: Theme.of(context).colorScheme.primary,
+              color: const Color(0xFF48C774),
             ),
             const SizedBox(height: 12),
             Text(
@@ -153,7 +162,7 @@ class ScanReceiptScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                color: Theme.of(context).colorScheme.primary,
+                color: const Color(0xFF48C774),
               ),
             ),
           ],
