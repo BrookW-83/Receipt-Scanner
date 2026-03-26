@@ -1,29 +1,11 @@
 services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_DB: receipt_scanner
-      POSTGRES_USER: receipt_user
-      POSTGRES_PASSWORD: receipt_pass
-    ports:
-      - "5434:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U receipt_user -d receipt_scanner"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  redis:
-    image: redis:7
-    ports:
-      - "6381:6379"
-
   web:
+    image: receipt_scanner_dev_web:latest
+    container_name: receipt_scanner_dev_web
     build: .
     command: >
-      sh -c "python manage.py migrate &&
+      sh -c "python manage.py makemigrations &&
+             python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8010"
     volumes:
       - .:/app
@@ -31,24 +13,21 @@ services:
       - "8010:8010"
     env_file:
       - .env
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+    networks:
+      - grocery_saving_dev_gs_backend_dev_network
 
   worker:
+    image: receipt_scanner_dev_worker:latest
+    container_name: receipt_scanner_dev_worker
     build: .
-    command: celery -A core worker -l info
+    command: celery -A core worker -l info -Q receipt_scanner
     volumes:
       - .:/app
     env_file:
       - .env
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
+    networks:
+      - grocery_saving_dev_gs_backend_dev_network
 
-volumes:
-  pgdata:
+networks:
+  grocery_saving_dev_gs_backend_dev_network:
+    external: true
