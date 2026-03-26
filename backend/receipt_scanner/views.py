@@ -48,10 +48,10 @@ from .services.product_matcher import normalize_product_name
 # HELPERS
 # =============================================================================
 
-def get_user_or_none(request):
-    """Get authenticated user or None for anonymous requests."""
+def get_user_id_or_none(request):
+    """Get authenticated user's ID or None for anonymous requests."""
     if request.user and request.user.is_authenticated:
-        return request.user
+        return request.user.id
     return None
 
 
@@ -100,10 +100,10 @@ class ReceiptScanViewSet(viewsets.ModelViewSet):
         return []
 
     def get_queryset(self):
-        user = get_user_or_none(self.request)
+        user_id = get_user_id_or_none(self.request)
         qs = ReceiptScan.objects.prefetch_related('items').order_by('-created_at')
-        if user:
-            return qs.filter(user=user)
+        if user_id:
+            return qs.filter(user_id=user_id)
         return qs
 
     def get_serializer_class(self):
@@ -119,7 +119,7 @@ class ReceiptScanViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         scan = ReceiptScan.objects.create(
-            user=get_user_or_none(request),
+            user_id=get_user_id_or_none(request),
             receipt_image=serializer.validated_data['receipt_image'],
             status=ReceiptScan.Status.PENDING,
         )
@@ -279,13 +279,13 @@ class PriceWatchViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PriceWatchSerializer
 
     def get_queryset(self):
-        user = get_user_or_none(self.request)
+        user_id = get_user_id_or_none(self.request)
         qs = PriceWatch.objects.filter(
             is_active=True,
             expires_at__gt=timezone.now()
         ).order_by('-created_at')
-        if user:
-            return qs.filter(user=user)
+        if user_id:
+            return qs.filter(user_id=user_id)
         return qs
 
     @action(detail=True, methods=['post'])
@@ -314,9 +314,9 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        user = get_user_or_none(self.request)
-        if user:
-            return UserDevice.objects.filter(user=user)
+        user_id = get_user_id_or_none(self.request)
+        if user_id:
+            return UserDevice.objects.filter(user_id=user_id)
         return UserDevice.objects.all()
 
     def get_serializer_class(self):
@@ -329,13 +329,13 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user = get_user_or_none(request)
+        user_id = get_user_id_or_none(request)
 
         # Upsert by token - if token exists, update user association
         device, created = UserDevice.objects.update_or_create(
             fcm_token=serializer.validated_data['fcm_token'],
             defaults={
-                'user': user,
+                'user_id': user_id,
                 'device_type': serializer.validated_data.get(
                     'device_type', UserDevice.DeviceType.ANDROID
                 ),
@@ -362,9 +362,9 @@ class UserDeviceViewSet(viewsets.ModelViewSet):
 
         # Filter by user if authenticated
         qs = UserDevice.objects.filter(fcm_token=token)
-        user = get_user_or_none(request)
-        if user:
-            qs = qs.filter(user=user)
+        user_id = get_user_id_or_none(request)
+        if user_id:
+            qs = qs.filter(user_id=user_id)
 
         updated = qs.update(is_active=False)
 
@@ -394,10 +394,10 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
-        user = get_user_or_none(self.request)
+        user_id = get_user_id_or_none(self.request)
         qs = Notification.objects.filter(is_sent=True).order_by('-sent_at')
-        if user:
-            return qs.filter(user=user)
+        if user_id:
+            return qs.filter(user_id=user_id)
         return qs
 
     @action(detail=True, methods=['patch'])
@@ -412,10 +412,10 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['post'], url_path='mark-all-read')
     def mark_all_read(self, request):
         """Mark all notifications as read."""
-        user = get_user_or_none(request)
+        user_id = get_user_id_or_none(request)
         qs = Notification.objects.filter(is_sent=True, read_at__isnull=True)
-        if user:
-            qs = qs.filter(user=user)
+        if user_id:
+            qs = qs.filter(user_id=user_id)
 
         updated = qs.update(read_at=timezone.now())
         return Response({'detail': f'marked {updated} as read'})
@@ -438,9 +438,9 @@ class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         """Get or create preferences for current user."""
-        user = get_user_or_none(self.request)
-        if user:
-            obj, _ = NotificationPreference.objects.get_or_create(user=user)
+        user_id = get_user_id_or_none(self.request)
+        if user_id:
+            obj, _ = NotificationPreference.objects.get_or_create(user_id=user_id)
             return obj
         # For anonymous users, return default preferences
         return NotificationPreference()

@@ -92,6 +92,15 @@ def extract_receipt_task(self, scan_id: str) -> str:
         image_path = scan.receipt_image.path
         extracted = extract_receipt_data(image_path)
 
+        # Check if image is not a receipt
+        if extracted.verification_status == "NOT_A_RECEIPT":
+            scan.status = ReceiptScan.Status.FAILED
+            scan.error_message = "The uploaded image doesn't appear to be a receipt. Please upload a clear photo of your receipt."
+            if extracted.verification_notes:
+                logger.info(f"Scan {scan_id}: Not a receipt - {extracted.verification_notes}")
+            scan.save(update_fields=['status', 'error_message', 'updated_at'])
+            return f"Scan {scan_id} failed: not a receipt"
+
         # Store raw extraction
         scan.extracted_payload = extracted.model_dump()
         scan.merchant_name = extracted.merchant_name
@@ -307,14 +316,14 @@ def process_receipt_items_task(self, scan_id: str) -> str:
                 with transaction.atomic():
                     # Check if watch already exists
                     existing = PriceWatch.objects.select_for_update().filter(
-                        user=scan.user,
+                        user_id=scan.user_id,
                         product_id=item.matched_product_id,
                         receipt_item=item,
                     ).first()
 
                     if not existing:
                         PriceWatch.objects.create(
-                            user=scan.user,
+                            user_id=scan.user_id,
                             product_id=item.matched_product_id,
                             receipt_item=item,
                             product_name=item.matched_product_name,

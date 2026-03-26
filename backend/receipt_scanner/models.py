@@ -1,5 +1,4 @@
 import uuid
-from django.conf import settings
 from django.db import models
 
 
@@ -87,13 +86,8 @@ class ReceiptScan(models.Model):
         FAILED = 'failed', 'Failed'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='receipt_scans',
-        null=True,
-        blank=True,
-    )
+    # Optional user ID (no FK constraint) - for future auth support
+    user_id = models.UUIDField(null=True, blank=True, db_index=True)
     receipt_image = models.ImageField(upload_to='receipt_scanner/raw/')
 
     # Extracted fields
@@ -121,7 +115,7 @@ class ReceiptScan(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['user_id', '-created_at']),
             models.Index(fields=['status']),
         ]
 
@@ -189,13 +183,8 @@ class PriceWatch(models.Model):
     """Track matched items for 30-day price drop monitoring."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='price_watches',
-        null=True,
-        blank=True,
-    )
+    # Optional user ID (no FK constraint) - for future auth support
+    user_id = models.UUIDField(null=True, blank=True, db_index=True)
     receipt_item = models.ForeignKey(
         ReceiptItem,
         on_delete=models.CASCADE,
@@ -221,11 +210,10 @@ class PriceWatch(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['user_id', 'is_active']),
             models.Index(fields=['product_id', 'is_active']),
             models.Index(fields=['expires_at']),
         ]
-        unique_together = ['user', 'product_id', 'receipt_item']
 
     def __str__(self):
         return f"Watch: {self.product_name} @ ${self.watched_price}"
@@ -244,13 +232,8 @@ class UserDevice(models.Model):
         WEB = 'web', 'Web'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='devices',
-        null=True,
-        blank=True,
-    )
+    # Optional user ID (no FK constraint) - for future auth support
+    user_id = models.UUIDField(null=True, blank=True, db_index=True)
     fcm_token = models.TextField(unique=True)
     device_type = models.CharField(max_length=10, choices=DeviceType.choices)
     device_name = models.CharField(max_length=100, blank=True)
@@ -261,7 +244,7 @@ class UserDevice(models.Model):
     class Meta:
         ordering = ['-last_used']
         indexes = [
-            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['user_id', 'is_active']),
         ]
 
     def __str__(self):
@@ -278,13 +261,8 @@ class Notification(models.Model):
         WEEKLY_SUMMARY = 'weekly_summary', 'Weekly Summary'
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='notifications',
-        null=True,
-        blank=True,
-    )
+    # Optional user ID (no FK constraint) - for future auth support
+    user_id = models.UUIDField(null=True, blank=True, db_index=True)
     notification_type = models.CharField(max_length=20, choices=NotificationType.choices)
     title = models.CharField(max_length=255)
     body = models.TextField()
@@ -305,8 +283,8 @@ class Notification(models.Model):
     class Meta:
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['user', '-created_at']),
-            models.Index(fields=['user', 'is_sent', 'scheduled_for']),
+            models.Index(fields=['user_id', '-created_at']),
+            models.Index(fields=['user_id', 'is_sent', 'scheduled_for']),
             models.Index(fields=['notification_type']),
         ]
 
@@ -317,13 +295,8 @@ class Notification(models.Model):
 class NotificationPreference(models.Model):
     """User notification settings."""
 
-    user = models.OneToOneField(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='notification_preferences',
-        null=True,
-        blank=True,
-    )
+    # Optional user ID (no FK constraint) - for future auth support
+    user_id = models.UUIDField(null=True, blank=True, unique=True)
 
     # Feature toggles
     price_drop_enabled = models.BooleanField(default=True)
@@ -345,4 +318,4 @@ class NotificationPreference(models.Model):
         verbose_name_plural = 'Notification preferences'
 
     def __str__(self):
-        return f"Preferences for {self.user}"
+        return f"Preferences for user {self.user_id}"
