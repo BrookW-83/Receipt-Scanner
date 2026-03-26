@@ -5,6 +5,9 @@ Calculates potential savings for receipt items by comparing receipt prices
 against current deal prices in the database.
 
 Shows users how much they COULD save if they used deals on this platform.
+
+Now includes unit-aware comparison for accurate savings calculation
+when comparing different package sizes (e.g., 2L vs 1L milk).
 """
 
 import logging
@@ -13,6 +16,7 @@ from typing import Dict, Any, Optional, List
 from django.utils import timezone
 
 from core.db_router import get_grocery_saving_connection
+from .unit_normalizer import get_unit_aware_savings, extract_unit_info
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +128,59 @@ def get_product_prices_batch(product_ids: List[str]) -> Dict[str, Optional[Decim
         return result
 
 
+def get_product_info_batch(product_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    """
+    Get product information (name, price) for multiple products.
+
+    Returns:
+        Dict mapping product_id to dict with 'name' and 'price' keys.
+    """
+    if not product_ids:
+        return {}
+
+    valid_ids = [pid for pid in product_ids if pid]
+    if not valid_ids:
+        return {}
+
+    now = timezone.now()
+    connection = get_grocery_saving_connection()
+
+    with connection.cursor() as cursor:
+        placeholders = ','.join(['%s'] * len(valid_ids))
+        # Join products and deals to get both name and best price
+        cursor.execute(
+            f"""
+            SELECT
+                p.id::text,
+                p.name,
+                MIN(d.discounted_price) as best_price
+            FROM products_product p
+            LEFT JOIN {DEAL_TABLE} d ON d.product_id = p.id
+                AND d.start_date <= %s
+                AND d.end_date >= %s
+                AND d.status IN %s
+            WHERE p.id::text IN ({placeholders})
+            GROUP BY p.id, p.name
+            """,
+            [now, now, VALID_DEAL_STATUSES] + valid_ids
+        )
+
+        result = {}
+        for row in cursor.fetchall():
+            product_id, name, price = row
+            result[str(product_id)] = {
+                'name': name or '',
+                'price': Decimal(str(price)).quantize(Decimal('0.01')) if price else None
+            }
+
+        # Fill in empty for products not found
+        for pid in valid_ids:
+            if pid not in result:
+                result[pid] = {'name': '', 'price': None}
+
+        return result
+
+
 # =============================================================================
 # SAVINGS CALCULATION
 # =============================================================================
@@ -186,13 +243,14 @@ def calculate_receipt_savings(
     Shows users how much they COULD have saved if they used deals on this platform.
 
     For each item with a matched_product_id:
-    1. Look up current best deal price
-    2. Compare to receipt price
-    3. If user paid MORE than deal price, calculate potential savings
+    1. Look up current best deal price AND product name
+    2. Compare prices using unit-aware comparison (handles 2L vs 1L etc.)
+    3. If user paid MORE than deal price per unit, calculate potential savings
 
     Args:
         items: List of receipt items with:
             - matched_product_id: Product UUID string
+            - description: Receipt item description (e.g., "MILK 2% 2L")
             - unit_price: Price paid per unit
             - quantity: Number of units
 
@@ -216,8 +274,8 @@ def calculate_receipt_savings(
         if item.get('matched_product_id')
     ]
 
-    # Batch fetch current prices
-    current_prices = get_product_prices_batch(product_ids)
+    # Batch fetch product info (name + price) for unit-aware comparison
+    product_info = get_product_info_batch(product_ids)
 
     total_savings = Decimal('0.00')
     items_with_savings = 0
@@ -227,6 +285,7 @@ def calculate_receipt_savings(
         product_id = item.get('matched_product_id')
         unit_price = item.get('unit_price')
         quantity = item.get('quantity', Decimal('1'))
+        receipt_description = item.get('description', '')
 
         # Ensure Decimal types
         if unit_price is not None:
@@ -234,12 +293,21 @@ def calculate_receipt_savings(
         if quantity is not None:
             quantity = Decimal(str(quantity))
 
-        # Get current deal price
-        database_price = current_prices.get(product_id) if product_id else None
+        # Get product info (name + price) from database
+        db_info = product_info.get(product_id, {}) if product_id else {}
+        database_price = db_info.get('price')
+        database_description = db_info.get('name', '')
 
-        # Calculate potential savings (only when user paid more than deal)
+        # Calculate potential savings using unit-aware comparison
         if database_price and unit_price:
-            savings = calculate_item_savings(unit_price, database_price, quantity)
+            # Use unit-aware savings calculation
+            savings = get_unit_aware_savings(
+                receipt_unit_price=unit_price,
+                receipt_description=receipt_description,
+                database_price=database_price,
+                database_description=database_description,
+                quantity=quantity
+            )
 
             # Track items where user could have saved
             if savings['total_saving'] > 0:
@@ -255,7 +323,7 @@ def calculate_receipt_savings(
         else:
             items_processed.append({
                 **item,
-                'database_price': None,
+                'database_price': database_price,
                 'saving_per_unit': Decimal('0.00'),
                 'total_saving': Decimal('0.00')
             })
