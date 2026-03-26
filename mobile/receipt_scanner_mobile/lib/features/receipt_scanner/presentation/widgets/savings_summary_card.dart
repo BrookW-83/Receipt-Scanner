@@ -14,7 +14,7 @@ class SavingsSummaryCard extends StatelessWidget {
     return Card(
       child: Column(
         children: [
-          // Savings banner
+          // Savings banner - show different message based on savings
           if (scan.hasSavings)
             Container(
               width: double.infinity,
@@ -58,6 +58,58 @@ class SavingsSummaryCard extends StatelessWidget {
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: const Color(0xFF48C774),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (!scan.hasMissedPromos)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  topRight: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.thumb_up,
+                      color: Colors.blue.shade700,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'You got the best prices!',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Get notified when new deals drop',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.blue.shade600,
                           ),
                         ),
                       ],
