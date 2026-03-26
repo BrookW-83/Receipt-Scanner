@@ -26,23 +26,11 @@ class ScanResultsView extends StatefulWidget {
 }
 
 class _ScanResultsViewState extends State<ScanResultsView> {
-  bool _notifyAllItems = true;
-  final Set<String> _notifyItems = {};
-
+  /// Primary green - rgba(72, 199, 116, 1)
   static const Color primaryGreen = Color(0xFF48C774);
   static const Color secondaryGreen = Color(0xFFABDEBC);
   static const Color bgColor = Color(0xFFF0F7F3);
   static const String _currencySymbol = 'Rs';
-
-  @override
-  void initState() {
-    super.initState();
-    for (final item in widget.scan.items) {
-      if (item.isMatched) {
-        _notifyItems.add(item.id);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,8 +67,8 @@ class _ScanResultsViewState extends State<ScanResultsView> {
         ),
       ),
 
-      // Done button
-      bottomNavigationBar: _buildDoneButton(),
+      // Notify button
+      bottomNavigationBar: _buildNotifyButton(),
     );
   }
 
@@ -429,37 +417,7 @@ class _ScanResultsViewState extends State<ScanResultsView> {
             'Items',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 8),
-
-          // Notify toggle
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Notify me when these items are on discount',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-                ),
-              ),
-              Switch(
-                value: _notifyAllItems,
-                onChanged: (value) {
-                  setState(() {
-                    _notifyAllItems = value;
-                    if (value) {
-                      for (final item in matchedItems) {
-                        _notifyItems.add(item.id);
-                      }
-                    } else {
-                      _notifyItems.clear();
-                    }
-                  });
-                },
-                activeThumbColor: Colors.white,
-                activeTrackColor: primaryGreen,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
 
           // Matched items
           ...matchedItems.map((item) => _buildItemCard(item)),
@@ -559,24 +517,6 @@ class _ScanResultsViewState extends State<ScanResultsView> {
               ],
             ),
           ),
-
-          // Toggle
-          Switch(
-            value: _notifyItems.contains(item.id),
-            onChanged: (value) {
-              setState(() {
-                if (value) {
-                  _notifyItems.add(item.id);
-                } else {
-                  _notifyItems.remove(item.id);
-                }
-                _notifyAllItems = _notifyItems.length ==
-                    widget.scan.items.where((i) => i.isMatched).length;
-              });
-            },
-            activeThumbColor: Colors.white,
-            activeTrackColor: primaryGreen,
-          ),
         ],
       ),
     );
@@ -605,10 +545,10 @@ class _ScanResultsViewState extends State<ScanResultsView> {
   }
 
   // ===========================================================================
-  // Done button
+  // Notify button
   // ===========================================================================
 
-  Widget _buildDoneButton() {
+  Widget _buildNotifyButton() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -622,8 +562,13 @@ class _ScanResultsViewState extends State<ScanResultsView> {
         ],
       ),
       child: SafeArea(
-        child: ElevatedButton(
+        child: ElevatedButton.icon(
           onPressed: widget.onDone,
+          icon: const Icon(Icons.notifications_active, size: 20),
+          label: const Text(
+            'Get Notified When Prices Drop',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryGreen,
             foregroundColor: Colors.white,
@@ -632,10 +577,6 @@ class _ScanResultsViewState extends State<ScanResultsView> {
               borderRadius: BorderRadius.circular(12),
             ),
             elevation: 0,
-          ),
-          child: const Text(
-            'Done',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
         ),
       ),
