@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:receipt_scanner_mobile/core/api/api_client.dart';
 import 'package:receipt_scanner_mobile/core/config/environment.dart';
+import 'package:receipt_scanner_mobile/core/utils/error_handler.dart';
 import '../models/receipt_scan_model.dart';
 import '../models/receipt_item_model.dart';
 import '../models/extracted_items_response.dart';
@@ -43,7 +44,9 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Upload failed (${response.statusCode}): ${response.body}');
+      final errorDetail = ErrorHandler.extractErrorDetail(response.body);
+      final message = errorDetail ?? 'Upload failed (${response.statusCode})';
+      throw Exception(ErrorHandler.getUserFriendlyMessage(message));
     }
 
     return ReceiptScanModel.fromJson(apiClient.parseJsonObject(response.body));
@@ -56,7 +59,9 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to get receipt details (${response.statusCode}): ${response.body}');
+      final errorDetail = ErrorHandler.extractErrorDetail(response.body);
+      final message = errorDetail ?? 'Failed to get receipt (${response.statusCode})';
+      throw Exception(ErrorHandler.getUserFriendlyMessage(message));
     }
 
     return ReceiptScanModel.fromJson(apiClient.parseJsonObject(response.body));
@@ -69,7 +74,9 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to get recent scans (${response.statusCode}): ${response.body}');
+      final errorDetail = ErrorHandler.extractErrorDetail(response.body);
+      final message = errorDetail ?? 'Failed to load scans (${response.statusCode})';
+      throw Exception(ErrorHandler.getUserFriendlyMessage(message));
     }
 
     final decoded = jsonDecode(response.body);
@@ -93,7 +100,9 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to get extracted items (${response.statusCode}): ${response.body}');
+      final errorDetail = ErrorHandler.extractErrorDetail(response.body);
+      final message = errorDetail ?? 'Failed to load items (${response.statusCode})';
+      throw Exception(ErrorHandler.getUserFriendlyMessage(message));
     }
 
     return ExtractedItemsResponse.fromJson(apiClient.parseJsonObject(response.body));
@@ -107,7 +116,9 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to update extracted items (${response.statusCode}): ${response.body}');
+      final errorDetail = ErrorHandler.extractErrorDetail(response.body);
+      final message = errorDetail ?? 'Failed to update items (${response.statusCode})';
+      throw Exception(ErrorHandler.getUserFriendlyMessage(message));
     }
   }
 
@@ -119,7 +130,9 @@ class ReceiptScannerRemoteDataSourceImpl implements ReceiptScannerRemoteDataSour
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Failed to confirm extracted items (${response.statusCode}): ${response.body}');
+      final errorDetail = ErrorHandler.extractErrorDetail(response.body);
+      final message = errorDetail ?? 'Failed to confirm items (${response.statusCode})';
+      throw Exception(ErrorHandler.getUserFriendlyMessage(message));
     }
   }
 }

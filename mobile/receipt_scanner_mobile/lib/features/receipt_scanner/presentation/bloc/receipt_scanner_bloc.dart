@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../../core/utils/error_handler.dart';
 import '../../domain/entities/receipt_scan_entity.dart';
 import '../../domain/entities/receipt_item_entity.dart';
 import '../../domain/usecases/upload_receipt_usecase.dart';
@@ -322,7 +323,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
         emit(ReceiptScannerInitial());
       }
     } catch (e) {
-      emit(ReceiptScannerFailure('Failed to capture image: $e'));
+      emit(ReceiptScannerFailure(ErrorHandler.cleanErrorMessage(e)));
     }
   }
 
@@ -338,7 +339,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
       );
       emit(ReceiptUploaded(scan));
     } catch (e) {
-      emit(ReceiptScannerFailure(e.toString()));
+      emit(ReceiptScannerFailure(ErrorHandler.cleanErrorMessage(e)));
     }
   }
 
@@ -351,7 +352,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
       final scan = await getReceiptDetailsUseCase(event.scanId);
       emit(ReceiptDetailsLoaded(scan));
     } catch (e) {
-      emit(ReceiptScannerFailure('Failed to load receipt: $e'));
+      emit(ReceiptScannerFailure(ErrorHandler.cleanErrorMessage(e)));
     }
   }
 
@@ -400,7 +401,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
 
       if (errors >= _maxConsecutiveErrors) {
         _pollingTimer?.cancel();
-        emit(ReceiptScannerFailure('Network error: Unable to check status. Error: $e'));
+        emit(ReceiptScannerFailure(ErrorHandler.cleanErrorMessage(e)));
         return;
       }
 
@@ -439,7 +440,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
       final scans = await getRecentScansUseCase();
       emit(RecentScansLoaded(scans));
     } catch (e) {
-      emit(ReceiptScannerFailure('Failed to load recent scans: $e'));
+      emit(ReceiptScannerFailure(ErrorHandler.cleanErrorMessage(e)));
     }
   }
 
@@ -470,7 +471,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
         items: response.items,
       ));
     } catch (e) {
-      emit(ReceiptScannerFailure('Failed to load extracted items: $e'));
+      emit(ReceiptScannerFailure(ErrorHandler.cleanErrorMessage(e)));
     }
   }
 
@@ -508,7 +509,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
     } catch (e) {
       // Restore previous state on error
       emit(currentState);
-      emit(ReceiptScannerFailure('Failed to update item: $e'));
+      emit(ReceiptScannerFailure(ErrorHandler.cleanErrorMessage(e)));
     }
   }
 
@@ -524,7 +525,7 @@ class ReceiptScannerBloc extends Bloc<ReceiptScannerEvent, ReceiptScannerState> 
       _postConfirm = true;
       add(PollReceiptStatusRequested(event.scanId));
     } catch (e) {
-      emit(ReceiptScannerFailure('Failed to confirm items: $e'));
+      emit(ReceiptScannerFailure(ErrorHandler.cleanErrorMessage(e)));
     }
   }
 
