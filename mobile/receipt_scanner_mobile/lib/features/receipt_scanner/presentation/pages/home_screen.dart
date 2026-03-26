@@ -12,13 +12,42 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver, RouteAware {
   static const Color primaryGreen = Color(0xFF48C774);
   static const String _currencySymbol = 'Rs';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadScans();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Reload when app comes back to foreground
+    if (state == AppLifecycleState.resumed) {
+      _loadScans();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload when navigating back to this screen
+    final currentState = context.read<ReceiptScannerBloc>().state;
+    if (currentState is! RecentScansLoaded && currentState is! ReceiptScannerLoading) {
+      _loadScans();
+    }
+  }
+
+  void _loadScans() {
     context.read<ReceiptScannerBloc>().add(LoadRecentScansRequested());
   }
 

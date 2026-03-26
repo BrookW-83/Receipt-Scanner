@@ -67,9 +67,22 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         state is ExtractedItemsUpdating;
   }
 
+  void _navigateBack() {
+    _bloc.add(StopPollingRequested());
+    _bloc.add(LoadRecentScansRequested());
+    context.go('/');
+  }
+
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<ReceiptScannerBloc, ReceiptScannerState>(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          _navigateBack();
+        }
+      },
+      child: BlocConsumer<ReceiptScannerBloc, ReceiptScannerState>(
       listener: (context, state) {
         if (state is ExtractedItemsConfirming) {
           setState(() => _analysisStarted = true);
@@ -102,10 +115,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
               _bloc.add(StopPollingRequested());
               context.go('/scan');
             },
-            onGoBack: () {
-              _bloc.add(StopPollingRequested());
-              context.go('/');
-            },
+            onGoBack: _navigateBack,
           );
         }
 
@@ -117,6 +127,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           ),
         );
       },
+    ),
     );
   }
 
@@ -146,10 +157,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                       backgroundColor: Colors.black38,
                       shape: const CircleBorder(),
                     ),
-                    onPressed: () {
-                      _bloc.add(StopPollingRequested());
-                      context.go('/');
-                    },
+                    onPressed: _navigateBack,
                   ),
                 ),
               ),
@@ -311,10 +319,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         title: const Text('Analysing Receipt'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            _bloc.add(StopPollingRequested());
-            context.go('/');
-          },
+          onPressed: _navigateBack,
         ),
       ),
       body: ProcessingIndicator(
@@ -331,10 +336,8 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   Widget _buildReceiptDetails(BuildContext context, ReceiptScanEntity scan) {
     return ScanResultsView(
       scan: scan,
-      onDone: () {
-        _bloc.add(StopPollingRequested());
-        context.go('/');
-      },
+      receiptImageUrl: scan.receiptImageUrl,
+      onDone: _navigateBack,
       onViewReceipt: () {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('View receipt coming soon')),
