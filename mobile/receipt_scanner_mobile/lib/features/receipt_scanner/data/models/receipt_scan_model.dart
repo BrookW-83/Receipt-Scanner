@@ -52,7 +52,7 @@ class ReceiptScanModel extends ReceiptScanEntity {
       totalMissedPromos: parseNum(json['total_missed_promos']),
       matchedItemsCount: (json['matched_items_count'] as num?)?.toInt() ?? 0,
       createdAt: parseDate(json['created_at']),
-      receiptImageUrl: json['receipt_image']?.toString(),
+      receiptImageUrl: json['receipt_image']?.toString().replaceFirst('http://', 'https://'),
     );
   }
 }

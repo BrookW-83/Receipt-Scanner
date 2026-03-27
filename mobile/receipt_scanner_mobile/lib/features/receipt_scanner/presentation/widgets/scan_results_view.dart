@@ -301,7 +301,7 @@ class _ScanResultsViewState extends State<ScanResultsView> {
                   ),
                   child: Center(
                     child: Text(
-                      '${(savingsPercent * 100).toStringAsFixed(0)}%',
+                      _formatPercent(savingsPercent),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -441,6 +441,13 @@ class _ScanResultsViewState extends State<ScanResultsView> {
         ],
       ),
     );
+  }
+
+  String _formatPercent(double fraction) {
+    final pct = fraction * 100;
+    if (pct == 0) return '0%';
+    if (pct < 1) return '${pct.toStringAsFixed(1)}%';
+    return '${pct.toStringAsFixed(0)}%';
   }
 
   Widget _legendDot(Color color) {

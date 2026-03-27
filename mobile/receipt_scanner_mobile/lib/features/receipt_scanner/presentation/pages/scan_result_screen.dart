@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -168,9 +169,9 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           DraggableScrollableSheet(
             initialChildSize: isExtracting ? 0.25 : 0.80,
             minChildSize: 0.20,
-            maxChildSize: 0.90,
+            maxChildSize: 0.95,
             snap: true,
-            snapSizes: const [0.25, 0.80],
+            snapSizes: const [0.25, 0.80, 0.95],
             builder: (context, scrollController) {
               return Container(
                 decoration: const BoxDecoration(
@@ -333,20 +334,107 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   // PHASE 3: Results
   // =========================================================================
 
+  void _showReceiptImageViewer(BuildContext context, String imageUrl) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: const Text('Receipt'),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                      color: const Color(0xFF48C774),
+                    ),
+                  );
+                },
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, color: Colors.white54, size: 64),
+                      SizedBox(height: 16),
+                      Text(
+                        'Failed to load image',
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _downloadReceiptImage(BuildContext context, String imageUrl) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Downloading receipt image...')),
+    );
+    try {
+      final httpClient = HttpClient();
+      final request = await httpClient.getUrl(Uri.parse(imageUrl));
+      final response = await request.close();
+      final bytes = await consolidateHttpClientResponseBytes(response);
+
+      final dir = Directory.systemTemp;
+      final fileName = 'receipt_${widget.scanId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final file = File('${dir.path}/$fileName');
+      await file.writeAsBytes(bytes);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Receipt saved: $fileName')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to download receipt')),
+      );
+    }
+  }
+
   Widget _buildReceiptDetails(BuildContext context, ReceiptScanEntity scan) {
     return ScanResultsView(
       scan: scan,
       receiptImageUrl: scan.receiptImageUrl,
       onDone: _navigateBack,
       onViewReceipt: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('View receipt coming soon')),
-        );
+        final imageUrl = scan.receiptImageUrl;
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          _showReceiptImageViewer(context, imageUrl);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Receipt image not available')),
+          );
+        }
       },
       onDownload: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Download coming soon')),
-        );
+        final imageUrl = scan.receiptImageUrl;
+        if (imageUrl != null && imageUrl.isNotEmpty) {
+          _downloadReceiptImage(context, imageUrl);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Receipt image not available')),
+          );
+        }
       },
     );
   }
