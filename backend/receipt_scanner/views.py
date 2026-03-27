@@ -146,22 +146,26 @@ class ReceiptScanViewSet(viewsets.ModelViewSet):
             status=status.HTTP_202_ACCEPTED
         )
 
-    @action(detail=True, methods=['get'], url_path='extracted-items')
+    @action(detail=True, methods=['get', 'patch'], url_path='extracted-items')
     def extracted_items(self, request, pk=None):
         """
-        Get extracted items for user review.
+        GET: Get extracted items for user review.
+        PATCH: Edit extracted items before processing.
 
         Only available when scan status is AWAITING_REVIEW.
         """
         scan = self.get_object()
 
-        # Allow viewing extracted items in AWAITING_REVIEW status
         if scan.status != ReceiptScan.Status.AWAITING_REVIEW:
             return Response(
                 {'detail': f'Scan must be in awaiting_review status, current status: {scan.status}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if request.method == 'PATCH':
+            return self._handle_update_extracted_items(request, scan)
+
+        # GET
         items = scan.items.all().order_by('line_number')
 
         return Response({
@@ -175,23 +179,8 @@ class ReceiptScanViewSet(viewsets.ModelViewSet):
             'items': ExtractedItemSerializer(items, many=True).data
         })
 
-    @action(detail=True, methods=['patch'], url_path='extracted-items')
-    def update_extracted_items(self, request, pk=None):
-        """
-        Edit extracted items before processing.
-
-        Only available when scan status is AWAITING_REVIEW.
-        Accepts: {"items": [{"id": "uuid", "description": "...", ...}, ...]}
-        """
-        scan = self.get_object()
-
-        # Only allow editing in AWAITING_REVIEW status
-        if scan.status != ReceiptScan.Status.AWAITING_REVIEW:
-            return Response(
-                {'detail': f'Scan must be in awaiting_review status, current status: {scan.status}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+    def _handle_update_extracted_items(self, request, scan):
+        """Handle PATCH for editing extracted items."""
         items_data = request.data.get('items', [])
         if not items_data:
             return Response(
