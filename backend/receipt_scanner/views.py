@@ -162,12 +162,14 @@ class ReceiptScanViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if request.method == 'PATCH':
-            return self._handle_update_extracted_items(request, scan)
+        if request.method == 'GET':
+            return self._get_extracted_items(scan)
+        elif request.method == 'PATCH':
+            return self._update_extracted_items(request, scan)
 
-        # GET
+    def _get_extracted_items(self, scan):
+        """Helper: Return extracted items for review."""
         items = scan.items.all().order_by('line_number')
-
         return Response({
             'scan_id': str(scan.id),
             'merchant_name': scan.merchant_name,
@@ -179,8 +181,11 @@ class ReceiptScanViewSet(viewsets.ModelViewSet):
             'items': ExtractedItemSerializer(items, many=True).data
         })
 
-    def _handle_update_extracted_items(self, request, scan):
-        """Handle PATCH for editing extracted items."""
+    def _update_extracted_items(self, request, scan):
+        """
+        Helper: Update extracted items.
+        Accepts: {"items": [{"id": "uuid", "description": "...", ...}, ...]}
+        """
         items_data = request.data.get('items', [])
         if not items_data:
             return Response(
