@@ -59,9 +59,11 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     });
   }
 
-  /// Whether we should show the bottom sheet overlay (extraction + review phase)
+  /// Whether we should show the bottom sheet overlay (extraction + review phase).
+  /// Only applies to fresh scans (localImagePath != null), not history views.
   bool _isSheetPhase(ReceiptScannerState state) {
     if (_analysisStarted) return false;
+    if (widget.localImagePath == null) return false;
     return state is ReceiptScannerLoading ||
         state is ReceiptProcessing ||
         state is ExtractedItemsLoaded ||
@@ -122,9 +124,9 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
 
         // Fallback loading
         return Scaffold(
-          backgroundColor: Colors.black,
-          body: _buildReceiptImageBackground(
-            child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+          backgroundColor: Colors.white,
+          body: const Center(
+            child: CircularProgressIndicator(color: Color(0xFF48C774)),
           ),
         );
       },
