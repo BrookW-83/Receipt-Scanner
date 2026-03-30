@@ -18,6 +18,15 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen> {
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<ReceiptScannerBloc, ReceiptScannerState>(
+      buildWhen: (previous, current) {
+        // Only rebuild for states relevant to this screen
+        // Ignore RecentScansLoaded etc. from HomeScreen
+        return current is ReceiptScannerInitial ||
+            current is ReceiptScannerLoading ||
+            current is ImageCaptured ||
+            current is ReceiptUploaded ||
+            current is ReceiptScannerFailure;
+      },
       listener: (context, state) {
         if (state is ImageCaptured) {
           _capturedImagePath = state.image.path;
